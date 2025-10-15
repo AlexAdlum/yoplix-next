@@ -98,17 +98,26 @@ export default function QuizPage({ params }: QuizPageProps) {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               {quiz.price > 0 ? (
                 <>
-                  <button className="px-8 py-4 bg-gradient-to-r from-yellow-400 to-pink-500 text-white font-bold rounded-xl hover:scale-105 transition-transform shadow-lg">
-                    Оплатить {quiz.price}₽
-                  </button>
-                  <button className="px-8 py-4 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-colors">
+                  <Link
+                    href={`/quiz/${quiz.slug}/host`}
+                    className="px-8 py-4 bg-gradient-to-r from-yellow-400 to-pink-500 text-white font-bold rounded-xl hover:scale-105 transition-transform shadow-lg text-center"
+                  >
+                    Перейти к запуску (оплату добавим позже)
+                  </Link>
+                  <Link
+                    href={`/quiz/${quiz.slug}/host`}
+                    className="px-8 py-4 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-colors text-center"
+                  >
                     Демо-версия
-                  </button>
+                  </Link>
                 </>
               ) : (
-                <button className="px-8 py-4 bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold rounded-xl hover:scale-105 transition-transform shadow-lg">
+                <Link
+                  href={`/quiz/${quiz.slug}/host`}
+                  className="px-8 py-4 bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold rounded-xl hover:scale-105 transition-transform shadow-lg text-center"
+                >
                   Начать игру
-                </button>
+                </Link>
               )}
             </div>
 

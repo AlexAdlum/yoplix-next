@@ -1,0 +1,29 @@
+# ЧЧЧ Node / Next.js ЧЧЧ
+node_modules
+.next
+out
+dist
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# ЧЧЧ Env & локальные файлы ЧЧЧ
+.env
+.env.*
+*.local
+
+# ЧЧЧ Ћоги, кеши, покрыти€ ЧЧЧ
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+.DS_Store
+*.log
+coverage
+.eslintcache
+.stylelintcache
+
+# ЧЧЧ Vercel/Tools ЧЧЧ
+.vercel
+turbo
+.pnp*
+.pnpm-store

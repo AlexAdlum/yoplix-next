@@ -16,6 +16,7 @@ type Player = {
 export default function HostPage({ params }: HostPageProps) {
   const quiz = getQuizBySlug(params.slug);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [started, setStarted] = useState(false);
   const joinUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
     const base = window.location.origin;
@@ -97,6 +98,12 @@ export default function HostPage({ params }: HostPageProps) {
               <span className="text-sm text-gray-500">{players.length} присоединилось</span>
             </div>
 
+            {started && (
+              <div className="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-700 px-4 py-3">
+                Игра запущена! Игроки получили сигнал старта.
+              </div>
+            )}
+
             {players.length === 0 ? (
               <p className="text-gray-500">Ожидание игроков…</p>
             ) : (
@@ -116,11 +123,16 @@ export default function HostPage({ params }: HostPageProps) {
                   const channel = new BroadcastChannel(`yoplix-join-${params.slug}`);
                   channel.postMessage({ type: "quiz:start" });
                   channel.close();
+                  setStarted(true);
                 }}
-                className="px-6 py-3 bg-gradient-to-r from-yellow-400 to-pink-500 text-white font-bold rounded-xl hover:scale-105 transition-transform shadow-lg"
-                disabled={players.length === 0}
+                className={`px-6 py-3 text-white font-bold rounded-xl transition-transform shadow-lg ${
+                  players.length === 0
+                    ? "bg-gray-300 cursor-not-allowed"
+                    : "bg-gradient-to-r from-yellow-400 to-pink-500 hover:scale-105"
+                }`}
+                disabled={players.length === 0 || started}
               >
-                Начать викторину
+                {started ? "Идёт игра" : "Начать викторину"}
               </button>
             </div>
           </div>

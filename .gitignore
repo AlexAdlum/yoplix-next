@@ -1,4 +1,4 @@
-# ——— Node / Next.js ———
+# пїЅпїЅпїЅ Node / Next.js пїЅпїЅпїЅ
 node_modules
 .next
 out
@@ -7,12 +7,12 @@ dist
 !.vscode/settings.json
 !.vscode/extensions.json
 
-# ——— Env & локальные файлы ———
+# пїЅпїЅпїЅ Env & пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ
 .env
 .env.*
 *.local
 
-# ——— Логи, кеши, покрытия ———
+# пїЅпїЅпїЅ пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
@@ -22,8 +22,16 @@ coverage
 .eslintcache
 .stylelintcache
 
-# ——— Vercel/Tools ———
+# пїЅпїЅпїЅ Vercel/Tools пїЅпїЅпїЅ
 .vercel
 turbo
 .pnp*
 .pnpm-store
+
+# Archives and generated files (do not commit)
+*.zip
+*.tar.gz
+*.tgz
+yoplix-deploy.zip
+yoplix-deploy.tar.gz
+yoplix-quizzes-export.xlsx

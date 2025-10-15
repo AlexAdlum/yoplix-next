@@ -44,17 +44,21 @@ export default function JoinPage({ params }: JoinPageProps) {
     );
   }
 
-  function handleReady() {
+  async function handleReady() {
     if (!nickname.trim()) return;
     const player = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       nickname: nickname.trim(),
       avatar,
     };
-    const channel = new BroadcastChannel(channelName);
-    channel.postMessage({ type: "player:join", payload: player });
-    channel.close();
-    setJoined(true);
+    try {
+      await fetch(`/api/sessions/${params.slug}/players`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(player),
+      });
+      setJoined(true);
+    } catch {}
   }
 
   return (

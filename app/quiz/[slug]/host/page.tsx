@@ -24,19 +24,22 @@ export default function HostPage({ params }: HostPageProps) {
   }, [params.slug]);
 
   useEffect(() => {
-    const channelName = `yoplix-join-${params.slug}`;
-    const channel = new BroadcastChannel(channelName);
-    const handler = (event: MessageEvent) => {
-      const data = event.data as { type: string; payload: Player };
-      if (data?.type === "player:join") {
-        setPlayers((prev) => {
-          const exists = prev.some((p) => p.id === data.payload.id);
-          return exists ? prev : [...prev, data.payload];
+    async function fetchPlayers() {
+      try {
+        const res = await fetch(`/api/sessions/${params.slug}/players`, {
+          cache: "no-store",
         });
-      }
+        if (res.ok) {
+          const data = (await res.json()) as { players: Player[] };
+          setPlayers(data.players);
+        }
+      } catch {}
+    }
+    fetchPlayers();
+    const timer = window.setInterval(fetchPlayers, 1500);
+    return () => {
+      window.clearInterval(timer);
     };
-    channel.addEventListener("message", handler);
-    return () => channel.close();
   }, [params.slug]);
 
   if (!quiz) {
@@ -119,12 +122,7 @@ export default function HostPage({ params }: HostPageProps) {
 
             <div className="mt-6 flex justify-end">
               <button
-                onClick={() => {
-                  const channel = new BroadcastChannel(`yoplix-join-${params.slug}`);
-                  channel.postMessage({ type: "quiz:start" });
-                  channel.close();
-                  setStarted(true);
-                }}
+                onClick={() => setStarted(true)}
                 className={`px-6 py-3 text-white font-bold rounded-xl transition-transform shadow-lg ${
                   players.length === 0
                     ? "bg-gray-300 cursor-not-allowed"

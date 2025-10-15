@@ -17,16 +17,36 @@ export default function HostPage({ params }: HostPageProps) {
   const quiz = getQuizBySlug(params.slug);
   const [players, setPlayers] = useState<Player[]>([]);
   const [started, setStarted] = useState(false);
+  const [roomId, setRoomId] = useState<string>("");
   const joinUrl = useMemo(() => {
-    if (typeof window === "undefined") return "";
+    if (typeof window === "undefined" || !roomId) return "";
     const base = window.location.origin;
-    return `${base}/join/${params.slug}`;
-  }, [params.slug]);
+    const url = new URL(`${base}/join/${params.slug}`);
+    url.searchParams.set("room", roomId);
+    return url.toString();
+  }, [params.slug, roomId]);
 
   useEffect(() => {
+    // Ensure room exists (create once per host screen open)
+    async function ensureRoom() {
+      if (roomId) return;
+      try {
+        const res = await fetch(`/api/sessions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug: params.slug }),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as { roomId: string };
+          setRoomId(data.roomId);
+        }
+      } catch {}
+    }
+    ensureRoom();
+
     async function fetchPlayers() {
       try {
-        const res = await fetch(`/api/sessions/${params.slug}/players`, {
+        const res = await fetch(`/api/sessions/${roomId || "_"}/players`, {
           cache: "no-store",
         });
         if (res.ok) {
@@ -40,7 +60,7 @@ export default function HostPage({ params }: HostPageProps) {
     return () => {
       window.clearInterval(timer);
     };
-  }, [params.slug]);
+  }, [params.slug, roomId]);
 
   if (!quiz) {
     return (
@@ -50,9 +70,9 @@ export default function HostPage({ params }: HostPageProps) {
     );
   }
 
-  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
-    joinUrl
-  )}`;
+  const qrSrc = joinUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}`
+    : "";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-pink-50">

@@ -22,8 +22,16 @@ export default function JoinPage({ params }: JoinPageProps) {
   const [avatar, setAvatar] = useState(avatars[0]);
   const [joined, setJoined] = useState(false);
   const [started, setStarted] = useState(false);
+  const [roomId, setRoomId] = useState<string>("");
 
   const channelName = useMemo(() => `yoplix-join-${params.slug}`, [params.slug]);
+
+  // Read roomId from query
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const room = new URLSearchParams(window.location.search).get("room");
+    if (room) setRoomId(room);
+  }, []);
 
   useEffect(() => {
     const channel = new BroadcastChannel(channelName);
@@ -46,13 +54,14 @@ export default function JoinPage({ params }: JoinPageProps) {
 
   async function handleReady() {
     if (!nickname.trim()) return;
+    if (!roomId) return;
     const player = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       nickname: nickname.trim(),
       avatar,
     };
     try {
-      await fetch(`/api/sessions/${params.slug}/players`, {
+      await fetch(`/api/sessions/${roomId}/players`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(player),

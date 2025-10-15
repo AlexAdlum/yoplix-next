@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-
-type Player = {
-  id: string;
-  nickname: string;
-  avatar: string;
-};
-
-// In-memory store per server instance
-const slugToPlayers: Map<string, Player[]> = new Map();
+import { addPlayer, listPlayers } from "@/app/lib/sessionStore";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
-  const { slug } = await params;
-  const players = slugToPlayers.get(slug) ?? [];
+  const { slug } = await params; // here slug acts as roomId for backward compat path
+  const players = listPlayers(slug);
   return NextResponse.json({ players }, { status: 200 });
 }
 
@@ -22,7 +14,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
-  const { slug } = await params;
+  const { slug } = await params; // slug == roomId
   let body: unknown;
   try {
     body = await req.json();
@@ -30,7 +22,11 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { id, nickname, avatar } = (body ?? {}) as Partial<Player>;
+  const { id, nickname, avatar } = (body ?? {}) as {
+    id?: string;
+    nickname?: string;
+    avatar?: string;
+  };
   if (!id || !nickname || !avatar) {
     return NextResponse.json(
       { error: "id, nickname, avatar are required" },
@@ -38,13 +34,7 @@ export async function POST(
     );
   }
 
-  const current = slugToPlayers.get(slug) ?? [];
-  const exists = current.some((p) => p.id === id);
-  if (!exists) {
-    current.push({ id, nickname, avatar });
-    slugToPlayers.set(slug, current);
-  }
-
+  addPlayer(slug, { id, nickname, avatar });
   return NextResponse.json({ ok: true }, { status: 201 });
 }
 

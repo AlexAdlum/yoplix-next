@@ -76,6 +76,16 @@ export const quizzes: Quiz[] = [
     questions: 22,
     duration: "18 минут",
   },
+  {
+    id: 7,
+    slug: "party-quizz",
+    title: "Весёлая викторина для вечеринки",
+    description: "Увлекательные вопросы о мемах, трендах и современной культуре. Отлично подходит для дружеских посиделок!",
+    type: "Развлечения",
+    price: 0,
+    questions: 15,
+    duration: "10 минут",
+  },
 ];
 
 export function getQuizBySlug(slug: string) {

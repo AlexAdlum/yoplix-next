@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { startQuiz, getCurrentQuestion, nextQuestion, endQuiz, generateRandomAnswers } from "@/app/lib/quizEngine";
+import { startQuiz, getCurrentQuestion, nextQuestion, endQuiz, generateRandomAnswers, getGameSession } from "@/app/lib/quizEngine";
 import { getQuizBySlug } from "@/app/data/quizzes";
 
 export async function POST(
@@ -53,15 +53,15 @@ export async function POST(
     }
     
     const answers = generateRandomAnswers(question);
-    const session = startQuiz(roomId, ""); // Получаем сессию для подсчета
+    const session = getGameSession(roomId);
     
     return NextResponse.json({
       question: {
         ...question,
         answers,
       },
-      currentQuestion: session.currentQuestionIndex + 1,
-      totalQuestions: session.questions.length,
+      currentQuestion: (session?.currentQuestionIndex ?? 0) + 1,
+      totalQuestions: session?.questions.length || 0,
     });
   }
   

@@ -37,10 +37,6 @@ export function startQuiz(roomId: string, slug: string): GameSession {
   // Фильтруем вопросы по slug и механике
   const filteredQuestions = questionsData.filter((q: unknown) => (q as Question).Slug === slug) as Question[];
   
-  // Отладочная информация
-  console.log(`Looking for slug: ${slug}`);
-  console.log(`Found ${filteredQuestions.length} questions`);
-  
   // Получаем механику для первого вопроса (предполагаем, что все вопросы одной викторины используют одну механику)
   const mechanicsType = filteredQuestions[0]?.mechanicsType;
   const mechanics = mechanicsData.find((m: Mechanics) => m.mechanicsType === mechanicsType) || null;

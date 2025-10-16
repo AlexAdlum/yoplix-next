@@ -45,15 +45,18 @@ export default function HostPage({ params }: HostPageProps) {
     ensureRoom();
 
     async function fetchPlayers() {
+      if (!roomId) return;
       try {
-        const res = await fetch(`/api/sessions/${roomId || "_"}/players`, {
+        const res = await fetch(`/api/sessions/${roomId}/players`, {
           cache: "no-store",
         });
         if (res.ok) {
           const data = (await res.json()) as { players: Player[] };
           setPlayers(data.players);
         }
-      } catch {}
+      } catch (error) {
+        console.error('Error fetching players:', error);
+      }
     }
     fetchPlayers();
     const timer = window.setInterval(fetchPlayers, 1500);

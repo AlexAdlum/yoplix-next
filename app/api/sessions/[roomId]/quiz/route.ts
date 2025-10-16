@@ -24,6 +24,11 @@ export async function POST(
     }
     
     const session = startQuiz(roomId, slug);
+    
+    if (session.questions.length === 0) {
+      return NextResponse.json({ error: "No questions found for this quiz" }, { status: 404 });
+    }
+    
     const question = session.questions[0];
     const answers = generateRandomAnswers(question);
     

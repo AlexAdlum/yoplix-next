@@ -156,8 +156,15 @@ export default function HostPage({ params }: HostPageProps) {
                       const channel = new BroadcastChannel(`yoplix-game-${roomId}`);
                       channel.postMessage({ type: "quiz:started" });
                       channel.close();
+                    } else {
+                      const error = await res.json();
+                      console.error('Quiz start error:', error);
+                      alert(`Ошибка запуска викторины: ${error.error || 'Неизвестная ошибка'}`);
                     }
-                  } catch {}
+                  } catch (error) {
+                    console.error('Network error:', error);
+                    alert('Ошибка сети при запуске викторины');
+                  }
                 }}
                 className={`px-6 py-3 text-white font-bold rounded-xl transition-transform shadow-lg ${
                   players.length === 0

@@ -23,6 +23,12 @@ export default function JoinPage({ params }: JoinPageProps) {
   const [joined, setJoined] = useState(false);
   const [started, setStarted] = useState(false);
   const [roomId, setRoomId] = useState<string>("");
+  const [playerId, setPlayerId] = useState<string>("");
+  const [currentQuestion, setCurrentQuestion] = useState<unknown>(null);
+  const [selectedAnswer, setSelectedAnswer] = useState<string>("");
+  const [showResult, setShowResult] = useState<boolean>(false);
+  const [isCorrect, setIsCorrect] = useState<boolean>(false);
+  const [playerScore, setPlayerScore] = useState<number>(0);
 
   const channelName = useMemo(() => `yoplix-join-${params.slug}`, [params.slug]);
 
@@ -44,6 +50,33 @@ export default function JoinPage({ params }: JoinPageProps) {
     return () => channel.close();
   }, [channelName]);
 
+  // Слушаем начало игры
+  useEffect(() => {
+    if (!roomId) return;
+    const gameChannel = new BroadcastChannel(`yoplix-game-${roomId}`);
+    const handler = async (event: MessageEvent) => {
+      if (event.data?.type === "quiz:started") {
+        setStarted(true);
+        await loadCurrentQuestion();
+      }
+    };
+    gameChannel.addEventListener("message", handler);
+    return () => gameChannel.close();
+  }, [roomId, loadCurrentQuestion]);
+
+  async function loadCurrentQuestion() {
+    if (!roomId) return;
+    try {
+      const res = await fetch(`/api/sessions/${roomId}/quiz`);
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.finished) {
+          setCurrentQuestion(data.question);
+        }
+      }
+    } catch {}
+  }
+
   if (!quiz) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -55,8 +88,11 @@ export default function JoinPage({ params }: JoinPageProps) {
   async function handleReady() {
     if (!nickname.trim()) return;
     if (!roomId) return;
+    const playerId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setPlayerId(playerId);
+    
     const player = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: playerId,
       nickname: nickname.trim(),
       avatar,
     };
@@ -67,6 +103,33 @@ export default function JoinPage({ params }: JoinPageProps) {
         body: JSON.stringify(player),
       });
       setJoined(true);
+    } catch {}
+  }
+
+  async function handleAnswerSelect(answer: string) {
+    if (!roomId || !playerId || !currentQuestion) return;
+    
+    setSelectedAnswer(answer);
+    try {
+      const res = await fetch(`/api/sessions/${roomId}/answers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId, answer }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setIsCorrect(data.isCorrect);
+        setPlayerScore(data.totalScore);
+        setShowResult(true);
+        
+        // Через 3 секунды переходим к следующему вопросу
+        setTimeout(async () => {
+          setShowResult(false);
+          setSelectedAnswer("");
+          await loadCurrentQuestion();
+        }, 3000);
+      }
     } catch {}
   }
 
@@ -129,17 +192,51 @@ export default function JoinPage({ params }: JoinPageProps) {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="bg-white rounded-2xl shadow-xl p-8">
             {!started ? (
-              <>
+              <div className="text-center">
                 <h2 className="text-2xl font-bold mb-2">Ожидание старта…</h2>
                 <p className="text-gray-600">Ожидайте ведущего. Игра скоро начнется.</p>
-              </>
+              </div>
+            ) : currentQuestion ? (
+              <div className={`transition-all duration-500 ${showResult ? (isCorrect ? 'bg-green-50' : 'bg-red-50') : ''}`}>
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-sm text-gray-500">Счёт: {playerScore}</span>
+                  <span className="text-sm text-gray-500">Вопрос {(currentQuestion as { questionID: number }).questionID}</span>
+                </div>
+                
+                <h2 className="text-xl font-bold mb-6 text-gray-800">
+                  {(currentQuestion as { question: string }).question}
+                </h2>
+                
+                {showResult ? (
+                  <div className="text-center">
+                    <div className={`text-2xl font-bold mb-2 ${isCorrect ? 'text-green-600' : 'text-red-600'}`}>
+                      {isCorrect ? '✅ Правильно!' : '❌ Неправильно'}
+                    </div>
+                    <p className="text-gray-600">
+                      Правильный ответ: <strong>{(currentQuestion as { answer1: string }).answer1}</strong>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3">
+                    {((currentQuestion as { answers: string[] }).answers || []).map((answer: string, index: number) => (
+                      <button
+                        key={index}
+                        onClick={() => handleAnswerSelect(answer)}
+                        className="p-4 text-left bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors border border-gray-200"
+                      >
+                        {answer}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
-              <>
-                <h2 className="text-2xl font-bold mb-2">Игра началась!</h2>
-                <p className="text-gray-600">Скоро появится первый вопрос…</p>
-              </>
+              <div className="text-center">
+                <h2 className="text-2xl font-bold mb-2">Игра завершена!</h2>
+                <p className="text-gray-600">Ваш финальный счёт: {playerScore}</p>
+              </div>
             )}
           </div>
         )}

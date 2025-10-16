@@ -142,7 +142,23 @@ export default function HostPage({ params }: HostPageProps) {
 
             <div className="mt-6 flex justify-end">
               <button
-                onClick={() => setStarted(true)}
+                onClick={async () => {
+                  if (!roomId) return;
+                  try {
+                    const res = await fetch(`/api/sessions/${roomId}/quiz`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ action: "start", slug: params.slug }),
+                    });
+                    if (res.ok) {
+                      setStarted(true);
+                      // Уведомляем игроков о начале викторины
+                      const channel = new BroadcastChannel(`yoplix-game-${roomId}`);
+                      channel.postMessage({ type: "quiz:started" });
+                      channel.close();
+                    }
+                  } catch {}
+                }}
                 className={`px-6 py-3 text-white font-bold rounded-xl transition-transform shadow-lg ${
                   players.length === 0
                     ? "bg-gray-300 cursor-not-allowed"

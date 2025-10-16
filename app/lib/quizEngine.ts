@@ -1,0 +1,104 @@
+import questionsData from '@/app/data/questions.json';
+import mechanicsData from '@/app/data/mechanics.json';
+
+export type Question = {
+  Slug: string;
+  questionID: number;
+  question: string;
+  mechanicsType: string;
+  answerCost: number;
+  answer1: string | number;
+  comment: string;
+  category: string;
+  wrong1: string;
+  wrong2: string;
+  wrong3: string;
+};
+
+export type Mechanics = {
+  mechanicsType: string;
+  script: string;
+  promptText: string;
+};
+
+export type GameSession = {
+  roomId: string;
+  currentQuestionIndex: number;
+  questions: Question[];
+  mechanics: Mechanics | null;
+  isActive: boolean;
+  questionStartTime: number;
+};
+
+// Хранилище активных игровых сессий
+const gameSessions = new Map<string, GameSession>();
+
+export function startQuiz(roomId: string, slug: string): GameSession {
+  // Фильтруем вопросы по slug и механике
+  const filteredQuestions = questionsData.filter((q: unknown) => (q as Question).Slug === slug) as Question[];
+  
+  // Получаем механику для первого вопроса (предполагаем, что все вопросы одной викторины используют одну механику)
+  const mechanicsType = filteredQuestions[0]?.mechanicsType;
+  const mechanics = mechanicsData.find((m: Mechanics) => m.mechanicsType === mechanicsType) || null;
+  
+  // Выбираем 15 случайных вопросов для этой сессии
+  const shuffled = [...filteredQuestions].sort(() => Math.random() - 0.5);
+  const selectedQuestions = shuffled.slice(0, 15);
+  
+  const session: GameSession = {
+    roomId,
+    currentQuestionIndex: 0,
+    questions: selectedQuestions,
+    mechanics,
+    isActive: true,
+    questionStartTime: Date.now(),
+  };
+  
+  gameSessions.set(roomId, session);
+  return session;
+}
+
+export function getCurrentQuestion(roomId: string): Question | null {
+  const session = gameSessions.get(roomId);
+  if (!session || !session.isActive || session.currentQuestionIndex >= session.questions.length) {
+    return null;
+  }
+  return session.questions[session.currentQuestionIndex];
+}
+
+export function getGameSession(roomId: string): GameSession | null {
+  return gameSessions.get(roomId) || null;
+}
+
+export function nextQuestion(roomId: string): Question | null {
+  const session = gameSessions.get(roomId);
+  if (!session || !session.isActive) return null;
+  
+  session.currentQuestionIndex++;
+  session.questionStartTime = Date.now();
+  
+  if (session.currentQuestionIndex >= session.questions.length) {
+    // Викторина завершена
+    session.isActive = false;
+    return null;
+  }
+  
+  return session.questions[session.currentQuestionIndex];
+}
+
+export function generateRandomAnswers(question: Question): string[] {
+  const answers = [String(question.answer1), question.wrong1, question.wrong2, question.wrong3];
+  // Перемешиваем массив случайным образом
+  return answers.sort(() => Math.random() - 0.5);
+}
+
+export function checkAnswer(question: Question, selectedAnswer: string): boolean {
+  return selectedAnswer === String(question.answer1);
+}
+
+export function endQuiz(roomId: string) {
+  const session = gameSessions.get(roomId);
+  if (session) {
+    session.isActive = false;
+  }
+}

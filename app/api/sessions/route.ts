@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "slug is required" }, { status: 400 });
   }
   const room = createRoom(slug);
-  return NextResponse.json(room, { status: 201 });
+  return NextResponse.json({ roomId: room.roomId }, { status: 201 });
 }
 
 

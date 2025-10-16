@@ -38,9 +38,15 @@ export default function HostPage({ params }: HostPageProps) {
         });
         if (res.ok) {
           const data = (await res.json()) as { roomId: string };
+          console.log('Room created:', data.roomId);
           setRoomId(data.roomId);
+        } else {
+          const error = await res.json();
+          console.error('Failed to create room:', error);
         }
-      } catch {}
+      } catch (error) {
+        console.error('Error creating room:', error);
+      }
     }
     ensureRoom();
 

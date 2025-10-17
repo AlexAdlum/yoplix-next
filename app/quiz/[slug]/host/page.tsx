@@ -25,13 +25,19 @@ export default function HostPage({ params }: HostPageProps) {
     const base = window.location.origin;
     const url = new URL(`${base}/join/${params.slug}`);
     url.searchParams.set("room", roomId);
-    return url.toString();
+    const finalUrl = url.toString();
+    console.log('joinUrl generated:', finalUrl);
+    return finalUrl;
   }, [params.slug, roomId]);
 
   useEffect(() => {
     // Ensure room exists (create once per host screen open)
     async function ensureRoom() {
-      if (roomId || isCreatingRoom) return;
+      console.log('ensureRoom called - roomId:', roomId, 'isCreatingRoom:', isCreatingRoom);
+      if (roomId || isCreatingRoom) {
+        console.log('ensureRoom - skipping, room already exists or is being created');
+        return;
+      }
       
       setIsCreatingRoom(true);
       console.log('Attempting to create room for slug:', params.slug);
@@ -47,7 +53,9 @@ export default function HostPage({ params }: HostPageProps) {
         if (res.ok) {
           const data = (await res.json()) as { roomId: string };
           console.log('Room created successfully:', data.roomId);
+          console.log('Setting roomId state to:', data.roomId);
           setRoomId(data.roomId);
+          console.log('RoomId state set, joinUrl will be:', `https://www.yoplix.ru/join/${params.slug}?room=${data.roomId}`);
         } else {
           const error = await res.json();
           console.error('Failed to create room:', error);
@@ -103,7 +111,7 @@ export default function HostPage({ params }: HostPageProps) {
   }
 
   const qrSrc = joinUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}&timestamp=${Date.now()}`
     : "";
 
   return (

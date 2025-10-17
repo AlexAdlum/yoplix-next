@@ -53,6 +53,9 @@ export default function JoinPage({ params }: JoinPageProps) {
         const data = await res.json();
         if (!data.finished) {
           setCurrentQuestion(data.question);
+          // Скрываем результат когда приходит новый вопрос
+          setShowResult(false);
+          setIsSubmittingAnswer(false);
         }
       }
     } catch {}
@@ -116,16 +119,15 @@ export default function JoinPage({ params }: JoinPageProps) {
     
     // Устанавливаем интервал для проверки текущего вопроса
     const interval = setInterval(async () => {
-      if (!showResult) { // Проверяем только если не показываем результат ответа
-        await loadCurrentQuestion();
-      }
+      // Всегда проверяем новые вопросы, но результат скроется автоматически
+      await loadCurrentQuestion();
     }, 2000); // Проверяем каждые 2 секунды
     
     return () => {
       console.log('Cleaning up question polling');
       clearInterval(interval);
     };
-  }, [roomId, started, showResult, loadCurrentQuestion]);
+  }, [roomId, started, loadCurrentQuestion]);
 
   if (!quiz) {
     return (
@@ -241,12 +243,8 @@ export default function JoinPage({ params }: JoinPageProps) {
         setPlayerScore(data.totalScore);
         setShowResult(true);
         
-        // Через 3 секунды просто скрываем результат
-        setTimeout(() => {
-          console.log('Hiding result...');
-          setShowResult(false);
-          setIsSubmittingAnswer(false);
-        }, 3000);
+        // Результат будет скрыт когда придет следующий вопрос
+        setIsSubmittingAnswer(false);
       } else {
         const errorData = await res.json().catch(() => ({ error: 'Failed to parse error response' }));
         console.error('handleAnswerSelect - error response:', errorData);

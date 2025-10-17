@@ -22,11 +22,18 @@ export default function HostPage({ params }: HostPageProps) {
   
   const joinUrl = useMemo(() => {
     if (typeof window === "undefined" || !roomId) return "";
-    const base = window.location.origin;
+    
+    // В продакшене используем yoplix.ru, в разработке - localhost
+    const base = process.env.NODE_ENV === 'production' 
+      ? 'https://yoplix.ru' 
+      : window.location.origin;
+    
     const url = new URL(`${base}/join/${params.slug}`);
     url.searchParams.set("room", roomId);
     const finalUrl = url.toString();
     console.log('joinUrl generated:', finalUrl);
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('Base URL:', base);
     return finalUrl;
   }, [params.slug, roomId]);
 

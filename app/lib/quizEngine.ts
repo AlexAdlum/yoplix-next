@@ -140,34 +140,39 @@ export function getGameSession(roomId: string): GameSession | null {
 }
 
 export function nextQuestion(roomId: string): Question | null {
-  console.log('nextQuestion - roomId:', roomId);
-  
-  const session = gameSessions.get(roomId);
-  console.log('nextQuestion - session:', session);
-  
-  if (!session || !session.isActive) {
-    console.log('nextQuestion - no active session');
+  try {
+    console.log('nextQuestion - roomId:', roomId);
+    
+    const session = gameSessions.get(roomId);
+    console.log('nextQuestion - session:', session);
+    
+    if (!session || !session.isActive) {
+      console.log('nextQuestion - no active session');
+      return null;
+    }
+    
+    console.log('nextQuestion - current index:', session.currentQuestionIndex, 'total questions:', session.questions.length);
+    
+    session.currentQuestionIndex++;
+    session.questionStartTime = Date.now();
+    
+    console.log('nextQuestion - new index:', session.currentQuestionIndex);
+    
+    if (session.currentQuestionIndex >= session.questions.length) {
+      // Викторина завершена
+      console.log('nextQuestion - quiz finished!');
+      session.isActive = false;
+      return null;
+    }
+    
+    const nextQuestion = session.questions[session.currentQuestionIndex];
+    console.log('nextQuestion - returning question ID:', nextQuestion.questionID);
+    
+    return nextQuestion;
+  } catch (error) {
+    console.error('nextQuestion - error:', error);
     return null;
   }
-  
-  console.log('nextQuestion - current index:', session.currentQuestionIndex, 'total questions:', session.questions.length);
-  
-  session.currentQuestionIndex++;
-  session.questionStartTime = Date.now();
-  
-  console.log('nextQuestion - new index:', session.currentQuestionIndex);
-  
-  if (session.currentQuestionIndex >= session.questions.length) {
-    // Викторина завершена
-    console.log('nextQuestion - quiz finished!');
-    session.isActive = false;
-    return null;
-  }
-  
-  const nextQuestion = session.questions[session.currentQuestionIndex];
-  console.log('nextQuestion - returning question ID:', nextQuestion.questionID);
-  
-  return nextQuestion;
 }
 
 export function generateRandomAnswers(question: Question, roomId?: string): string[] {

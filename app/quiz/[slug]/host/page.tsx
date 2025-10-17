@@ -163,9 +163,12 @@ export default function HostPage({ params }: HostPageProps) {
                     });
                     if (res.ok) {
                       setStarted(true);
+                      console.log('Quiz started successfully, notifying players...');
                       // Уведомляем игроков о начале викторины
                       const channel = new BroadcastChannel(`yoplix-game-${roomId}`);
+                      console.log('BroadcastChannel created:', `yoplix-game-${roomId}`);
                       channel.postMessage({ type: "quiz:started" });
+                      console.log('Message sent to players');
                       channel.close();
                     } else {
                       const error = await res.json();

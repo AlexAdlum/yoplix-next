@@ -27,6 +27,7 @@ export type GameSession = {
   questions: Question[];
   mechanics: Mechanics | null;
   isActive: boolean;
+  isGameStarted: boolean;
   questionStartTime: number;
 };
 
@@ -78,6 +79,7 @@ export function startQuiz(roomId: string, slug: string): GameSession {
     questions: selectedQuestions,
     mechanics,
     isActive: true,
+    isGameStarted: true,
     questionStartTime: Date.now(),
   };
   
@@ -135,4 +137,14 @@ export function endQuiz(roomId: string) {
   if (session) {
     session.isActive = false;
   }
+}
+
+export function getGameStatus(roomId: string): { isGameStarted: boolean; isActive: boolean } | null {
+  const session = gameSessions.get(roomId);
+  if (!session) return null;
+  
+  return {
+    isGameStarted: session.isGameStarted,
+    isActive: session.isActive,
+  };
 }

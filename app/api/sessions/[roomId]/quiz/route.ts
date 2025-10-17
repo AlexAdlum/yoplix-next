@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { startQuiz, getCurrentQuestion, nextQuestion, endQuiz, generateRandomAnswers, getGameSession } from "@/app/lib/quizEngine";
+import { startQuiz, getCurrentQuestion, nextQuestion, endQuiz, generateRandomAnswers, getGameSession, getGameStatus } from "@/app/lib/quizEngine";
 import { getQuizBySlug } from "@/app/data/quizzes";
 
 export async function POST(
@@ -74,11 +74,27 @@ export async function POST(
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ roomId: string }> }
 ) {
   const { roomId } = await params;
+  const { searchParams } = new URL(req.url);
+  const checkStatus = searchParams.get('status');
   
+  // Если запрашивается только статус игры
+  if (checkStatus === 'true') {
+    const status = getGameStatus(roomId);
+    if (!status) {
+      return NextResponse.json({ 
+        isGameStarted: false,
+        isActive: false,
+        message: "No game session found" 
+      });
+    }
+    return NextResponse.json(status);
+  }
+  
+  // Обычная логика получения вопроса
   const question = getCurrentQuestion(roomId);
   if (!question) {
     return NextResponse.json({ 

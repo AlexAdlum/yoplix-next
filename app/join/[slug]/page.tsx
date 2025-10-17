@@ -51,6 +51,24 @@ export default function JoinPage({ params }: JoinPageProps) {
     } catch {}
   }, [roomId]);
 
+  const checkGameStatus = useCallback(async () => {
+    if (!roomId) return;
+    try {
+      const res = await fetch(`/api/sessions/${roomId}/quiz?status=true`);
+      if (res.ok) {
+        const data = await res.json();
+        console.log('Game status check:', data);
+        if (data.isGameStarted && !started) {
+          console.log('Game started detected, loading first question');
+          setStarted(true);
+          await loadCurrentQuestion();
+        }
+      }
+    } catch (error) {
+      console.error('Error checking game status:', error);
+    }
+  }, [roomId, started, loadCurrentQuestion]);
+
   useEffect(() => {
     const channel = new BroadcastChannel(channelName);
     const handler = (event: MessageEvent) => {
@@ -62,19 +80,23 @@ export default function JoinPage({ params }: JoinPageProps) {
     return () => channel.close();
   }, [channelName]);
 
-  // Слушаем начало игры
+  // Слушаем начало игры через polling
   useEffect(() => {
-    if (!roomId) return;
-    const gameChannel = new BroadcastChannel(`yoplix-game-${roomId}`);
-    const handler = async (event: MessageEvent) => {
-      if (event.data?.type === "quiz:started") {
-        setStarted(true);
-        await loadCurrentQuestion();
-      }
+    if (!roomId || started) return;
+    
+    console.log('Setting up game status polling for roomId:', roomId);
+    
+    // Проверяем статус сразу
+    checkGameStatus();
+    
+    // Устанавливаем интервал для проверки статуса
+    const interval = setInterval(checkGameStatus, 1000); // Проверяем каждую секунду
+    
+    return () => {
+      console.log('Cleaning up game status polling');
+      clearInterval(interval);
     };
-    gameChannel.addEventListener("message", handler);
-    return () => gameChannel.close();
-  }, [roomId, loadCurrentQuestion]);
+  }, [roomId, started, checkGameStatus]);
 
   if (!quiz) {
     return (

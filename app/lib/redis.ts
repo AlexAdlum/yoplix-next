@@ -2,7 +2,7 @@
 import { Redis } from '@upstash/redis';
 
 // Проверяем, работаем ли мы в продакшене с Upstash Redis
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
 const hasUpstashConfig = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
 
 let redis: {
@@ -15,6 +15,14 @@ let redis: {
 if (isProduction && hasUpstashConfig) {
   // Используем Upstash Redis в продакшене
   console.log('Using Upstash Redis for production');
+  console.log('Redis config check:', {
+    isProduction,
+    hasUpstashConfig,
+    NODE_ENV: process.env.NODE_ENV,
+    VERCEL: process.env.VERCEL,
+    hasUrl: !!process.env.UPSTASH_REDIS_REST_URL,
+    hasToken: !!process.env.UPSTASH_REDIS_REST_TOKEN
+  });
   const upstashRedis = new Redis({
     url: process.env.UPSTASH_REDIS_REST_URL!,
     token: process.env.UPSTASH_REDIS_REST_TOKEN!,

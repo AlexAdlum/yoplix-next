@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   trailingSlash: false,
   poweredByHeader: false,
   
+  // Настройки для сервера
+  serverExternalPackages: [],
+  
   // Настройки для продакшена
   output: 'standalone',
   

@@ -32,7 +32,15 @@ export type GameSession = {
 };
 
 // Хранилище активных игровых сессий
-const gameSessions = new Map<string, GameSession>();
+// Используем глобальную переменную для сохранения между запросами
+declare global {
+  var __gameSessions: Map<string, GameSession> | undefined;
+}
+
+const gameSessions = globalThis.__gameSessions || new Map<string, GameSession>();
+if (!globalThis.__gameSessions) {
+  globalThis.__gameSessions = gameSessions;
+}
 
 // Функция для генерации псевдослучайного числа на основе seed
 function seededRandom(seed: number): number {
@@ -56,6 +64,8 @@ function seededShuffle<T>(array: T[], seed: number): T[] {
 
 export function startQuiz(roomId: string, slug: string): GameSession {
   console.log('startQuiz - roomId:', roomId, 'slug:', slug);
+  console.log('startQuiz - current sessions in map:', gameSessions.size);
+  console.log('startQuiz - existing sessions:', Array.from(gameSessions.keys()));
   
   // Фильтруем вопросы по slug и механике
   const filteredQuestions = questionsData.filter((q: unknown) => (q as Question).Slug === slug) as Question[];
@@ -95,6 +105,7 @@ export function startQuiz(roomId: string, slug: string): GameSession {
   };
   
   gameSessions.set(roomId, session);
+  console.log('startQuiz - session stored, total sessions:', gameSessions.size);
   console.log('startQuiz - session created:', session);
   return session;
 }
@@ -108,7 +119,24 @@ export function getCurrentQuestion(roomId: string): Question | null {
 }
 
 export function getGameSession(roomId: string): GameSession | null {
-  return gameSessions.get(roomId) || null;
+  console.log('getGameSession - roomId:', roomId);
+  console.log('getGameSession - total sessions:', gameSessions.size);
+  console.log('getGameSession - session keys:', Array.from(gameSessions.keys()));
+  
+  const session = gameSessions.get(roomId);
+  console.log('getGameSession - found session:', session ? 'YES' : 'NO');
+  
+  if (session) {
+    console.log('getGameSession - session details:', {
+      roomId: session.roomId,
+      currentQuestionIndex: session.currentQuestionIndex,
+      questionsCount: session.questions.length,
+      isActive: session.isActive,
+      isGameStarted: session.isGameStarted
+    });
+  }
+  
+  return session || null;
 }
 
 export function nextQuestion(roomId: string): Question | null {

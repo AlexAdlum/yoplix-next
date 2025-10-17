@@ -44,8 +44,15 @@ export async function POST(
   }
   
   if (action === "next") {
+    console.log('API next - roomId:', roomId);
+    const session = getGameSession(roomId);
+    console.log('API next - current session:', session);
+    
     const question = nextQuestion(roomId);
+    console.log('API next - next question:', question);
+    
     if (!question) {
+      console.log('API next - quiz finished, returning finished response');
       return NextResponse.json({ 
         finished: true,
         message: "Викторина завершена" 
@@ -53,15 +60,16 @@ export async function POST(
     }
     
     const answers = generateRandomAnswers(question, roomId);
-    const session = getGameSession(roomId);
+    const updatedSession = getGameSession(roomId);
+    console.log('API next - updated session:', updatedSession);
     
     return NextResponse.json({
       question: {
         ...question,
         answers,
       },
-      currentQuestion: (session?.currentQuestionIndex ?? 0) + 1,
-      totalQuestions: session?.questions.length || 0,
+      currentQuestion: (updatedSession?.currentQuestionIndex ?? 0) + 1,
+      totalQuestions: updatedSession?.questions.length || 0,
     });
   }
   

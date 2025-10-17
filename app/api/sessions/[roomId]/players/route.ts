@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listPlayers, addPlayer, getRoom } from "@/app/lib/sessionStore";
+import { listPlayers, addPlayer, getRoom } from "@/app/lib/sessionStoreRedis";
 
 export async function GET(
   _req: NextRequest,
@@ -8,7 +8,7 @@ export async function GET(
   const { roomId } = await params;
   console.log('GET /api/sessions/[roomId]/players - roomId:', roomId);
   
-  const players = listPlayers(roomId);
+  const players = await listPlayers(roomId);
   console.log('GET /api/sessions/[roomId]/players - players:', players);
   
   return NextResponse.json({ players }, { status: 200 });
@@ -47,7 +47,7 @@ export async function POST(
     }
     
     // Проверяем, что комната существует
-    const room = getRoom(roomId);
+    const room = await getRoom(roomId);
     console.log('POST /api/sessions/[roomId]/players - room:', room);
     
     if (!room) {
@@ -59,9 +59,9 @@ export async function POST(
     
     // Добавляем игрока в комнату
     console.log('POST /api/sessions/[roomId]/players - adding player:', { id, nickname, avatar });
-    addPlayer(roomId, { id, nickname, avatar });
+    await addPlayer(roomId, { id, nickname, avatar });
     
-    const players = listPlayers(roomId);
+    const players = await listPlayers(roomId);
     console.log('POST /api/sessions/[roomId]/players - players after add:', players);
     
     return NextResponse.json({ 

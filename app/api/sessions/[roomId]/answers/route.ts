@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentQuestion, checkAnswer } from "@/app/lib/quizEngine";
-import { addPlayerAnswer, getPlayerScore } from "@/app/lib/sessionStore";
+import { getCurrentQuestion, checkAnswer } from "@/app/lib/quizEngineRedis";
+import { addPlayerAnswer, getPlayerScore } from "@/app/lib/sessionStoreRedis";
 
 export async function POST(
   req: NextRequest,
@@ -33,7 +33,7 @@ export async function POST(
       }, { status: 400 });
     }
     
-    const question = getCurrentQuestion(roomId);
+    const question = await getCurrentQuestion(roomId);
     console.log('API POST /answers - question:', question ? 'found' : 'not found');
     
     if (!question) {
@@ -50,7 +50,7 @@ export async function POST(
     console.log('API POST /answers - result:', { isCorrect, points, correctAnswer: question.answer1 });
     
     // Сохраняем ответ игрока
-    addPlayerAnswer(roomId, playerId, {
+    await addPlayerAnswer(roomId, playerId, {
       questionId: question.questionID,
       answer,
       isCorrect,
@@ -58,7 +58,7 @@ export async function POST(
       responseTime,
     });
     
-    const playerScore = getPlayerScore(roomId, playerId);
+    const playerScore = await getPlayerScore(roomId, playerId);
     console.log('API POST /answers - player score:', playerScore);
     
     return NextResponse.json({

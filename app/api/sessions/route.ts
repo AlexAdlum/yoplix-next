@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createRoom } from "@/app/lib/sessionStore";
+import { createRoom } from "@/app/lib/sessionStoreRedis";
 
 export async function POST(req: NextRequest) {
   console.log('POST /api/sessions - received request');
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
   
   console.log('POST /api/sessions - creating room for slug:', slug);
-  const room = createRoom(slug);
+  const room = await createRoom(slug);
   console.log('POST /api/sessions - created room:', room);
   
   return NextResponse.json({ roomId: room.roomId }, { 

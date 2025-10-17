@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { startQuiz, getCurrentQuestion, nextQuestion, endQuiz, generateRandomAnswers, getGameSession, getGameStatus } from "@/app/lib/quizEngine";
+import { startQuiz, getCurrentQuestion, nextQuestion, endQuiz, generateRandomAnswers, getGameSession, getGameStatus } from "@/app/lib/quizEngineRedis";
 import { getQuizBySlug } from "@/app/data/quizzes";
 
 export async function POST(
@@ -33,7 +33,7 @@ export async function POST(
           return NextResponse.json({ error: "Quiz not found" }, { status: 404 });
         }
         
-        const session = startQuiz(roomId, slug);
+        const session = await startQuiz(roomId, slug);
         console.log('API POST /quiz - session created:', session);
         
         if (session.questions.length === 0) {
@@ -63,10 +63,10 @@ export async function POST(
       console.log('API next - roomId:', roomId);
       
       try {
-        const session = getGameSession(roomId);
+        const session = await getGameSession(roomId);
         console.log('API next - current session:', session);
         
-        const question = nextQuestion(roomId);
+        const question = await nextQuestion(roomId);
         console.log('API next - next question:', question);
         
         if (!question) {
@@ -78,7 +78,7 @@ export async function POST(
         }
         
         const answers = generateRandomAnswers(question, roomId);
-        const updatedSession = getGameSession(roomId);
+        const updatedSession = await getGameSession(roomId);
         console.log('API next - updated session:', updatedSession);
         
         return NextResponse.json({
@@ -98,7 +98,7 @@ export async function POST(
     if (action === "end") {
       console.log('API POST /quiz - ending quiz');
       try {
-        endQuiz(roomId);
+        await endQuiz(roomId);
         return NextResponse.json({ message: "Quiz ended" });
       } catch (error) {
         console.error('API POST /quiz - end error:', error);
@@ -130,7 +130,7 @@ export async function GET(
     // Если запрашивается только статус игры
     if (checkStatus === 'true') {
       try {
-        const status = getGameStatus(roomId);
+        const status = await getGameStatus(roomId);
         console.log('API GET /quiz - status:', status);
         
         if (!status) {
@@ -153,8 +153,8 @@ export async function GET(
     
     // Обычная логика получения вопроса
     try {
-      const question = getCurrentQuestion(roomId);
-      const session = getGameSession(roomId);
+      const question = await getCurrentQuestion(roomId);
+      const session = await getGameSession(roomId);
       
       console.log('API GET /quiz - question:', question ? 'found' : 'not found');
       console.log('API GET /quiz - session:', session ? 'found' : 'not found');

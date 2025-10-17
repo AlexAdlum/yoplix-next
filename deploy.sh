@@ -72,3 +72,4 @@ echo "- https://yoplix.ru"
 echo "- https://yoplix.ru/sitemap.xml"
 echo "- https://yoplix.ru/robots.txt"
 echo "- https://yoplix.ru/privacy"
+

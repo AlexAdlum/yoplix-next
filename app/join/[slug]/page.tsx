@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getQuizBySlug } from "@/app/data/quizzes";
 
 interface JoinPageProps {
@@ -25,7 +25,6 @@ export default function JoinPage({ params }: JoinPageProps) {
   const [roomId, setRoomId] = useState<string>("");
   const [playerId, setPlayerId] = useState<string>("");
   const [currentQuestion, setCurrentQuestion] = useState<unknown>(null);
-  const [selectedAnswer, setSelectedAnswer] = useState<string>("");
   const [showResult, setShowResult] = useState<boolean>(false);
   const [isCorrect, setIsCorrect] = useState<boolean>(false);
   const [playerScore, setPlayerScore] = useState<number>(0);
@@ -38,6 +37,19 @@ export default function JoinPage({ params }: JoinPageProps) {
     const room = new URLSearchParams(window.location.search).get("room");
     if (room) setRoomId(room);
   }, []);
+
+  const loadCurrentQuestion = useCallback(async () => {
+    if (!roomId) return;
+    try {
+      const res = await fetch(`/api/sessions/${roomId}/quiz`);
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.finished) {
+          setCurrentQuestion(data.question);
+        }
+      }
+    } catch {}
+  }, [roomId]);
 
   useEffect(() => {
     const channel = new BroadcastChannel(channelName);
@@ -63,19 +75,6 @@ export default function JoinPage({ params }: JoinPageProps) {
     gameChannel.addEventListener("message", handler);
     return () => gameChannel.close();
   }, [roomId, loadCurrentQuestion]);
-
-  async function loadCurrentQuestion() {
-    if (!roomId) return;
-    try {
-      const res = await fetch(`/api/sessions/${roomId}/quiz`);
-      if (res.ok) {
-        const data = await res.json();
-        if (!data.finished) {
-          setCurrentQuestion(data.question);
-        }
-      }
-    } catch {}
-  }
 
   if (!quiz) {
     return (
@@ -109,7 +108,6 @@ export default function JoinPage({ params }: JoinPageProps) {
   async function handleAnswerSelect(answer: string) {
     if (!roomId || !playerId || !currentQuestion) return;
     
-    setSelectedAnswer(answer);
     try {
       const res = await fetch(`/api/sessions/${roomId}/answers`, {
         method: "POST",
@@ -126,7 +124,6 @@ export default function JoinPage({ params }: JoinPageProps) {
         // Через 3 секунды переходим к следующему вопросу
         setTimeout(async () => {
           setShowResult(false);
-          setSelectedAnswer("");
           await loadCurrentQuestion();
         }, 3000);
       }

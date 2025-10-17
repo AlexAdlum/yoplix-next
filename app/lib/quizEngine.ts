@@ -33,16 +33,43 @@ export type GameSession = {
 // Хранилище активных игровых сессий
 const gameSessions = new Map<string, GameSession>();
 
+// Функция для генерации псевдослучайного числа на основе seed
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
+
+// Функция для перемешивания массива с использованием seed
+function seededShuffle<T>(array: T[], seed: number): T[] {
+  const shuffled = [...array];
+  let currentSeed = seed;
+  
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    currentSeed = (currentSeed * 9301 + 49297) % 233280;
+    const j = Math.floor(seededRandom(currentSeed) * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  
+  return shuffled;
+}
+
 export function startQuiz(roomId: string, slug: string): GameSession {
   // Фильтруем вопросы по slug и механике
   const filteredQuestions = questionsData.filter((q: unknown) => (q as Question).Slug === slug) as Question[];
+  
+  if (filteredQuestions.length === 0) {
+    throw new Error(`No questions found for quiz: ${slug}`);
+  }
   
   // Получаем механику для первого вопроса (предполагаем, что все вопросы одной викторины используют одну механику)
   const mechanicsType = filteredQuestions[0]?.mechanicsType;
   const mechanics = mechanicsData.find((m: Mechanics) => m.mechanicsType === mechanicsType) || null;
   
-  // Выбираем 15 случайных вопросов для этой сессии
-  const shuffled = [...filteredQuestions].sort(() => Math.random() - 0.5);
+  // Создаем seed на основе roomId для консистентной случайности
+  const seed = roomId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  
+  // Выбираем 15 случайных вопросов для этой сессии с использованием seed
+  const shuffled = seededShuffle(filteredQuestions, seed);
   const selectedQuestions = shuffled.slice(0, 15);
   
   const session: GameSession = {
@@ -86,9 +113,16 @@ export function nextQuestion(roomId: string): Question | null {
   return session.questions[session.currentQuestionIndex];
 }
 
-export function generateRandomAnswers(question: Question): string[] {
+export function generateRandomAnswers(question: Question, roomId?: string): string[] {
   const answers = [String(question.answer1), question.wrong1, question.wrong2, question.wrong3];
-  // Перемешиваем массив случайным образом
+  
+  if (roomId) {
+    // Используем seed на основе roomId и questionID для консистентности
+    const seed = roomId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) + question.questionID;
+    return seededShuffle(answers, seed);
+  }
+  
+  // Если roomId не передан, используем обычную случайность (для обратной совместимости)
   return answers.sort(() => Math.random() - 0.5);
 }
 

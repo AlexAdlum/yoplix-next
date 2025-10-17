@@ -30,7 +30,7 @@ export async function POST(
     }
     
     const question = session.questions[0];
-    const answers = generateRandomAnswers(question);
+    const answers = generateRandomAnswers(question, roomId);
     
     return NextResponse.json({
       question: {
@@ -52,7 +52,7 @@ export async function POST(
       });
     }
     
-    const answers = generateRandomAnswers(question);
+    const answers = generateRandomAnswers(question, roomId);
     const session = getGameSession(roomId);
     
     return NextResponse.json({
@@ -87,7 +87,7 @@ export async function GET(
     });
   }
   
-  const answers = generateRandomAnswers(question);
+  const answers = generateRandomAnswers(question, roomId);
   
   return NextResponse.json({
     question: {

@@ -30,15 +30,17 @@ export default function HostPage({ params }: HostPageProps) {
     // Ensure room exists (create once per host screen open)
     async function ensureRoom() {
       if (roomId) return;
+      console.log('Attempting to create room for slug:', params.slug);
       try {
         const res = await fetch(`/api/sessions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ slug: params.slug }),
         });
+        console.log('Room creation response status:', res.status);
         if (res.ok) {
           const data = (await res.json()) as { roomId: string };
-          console.log('Room created:', data.roomId);
+          console.log('Room created successfully:', data.roomId);
           setRoomId(data.roomId);
         } else {
           const error = await res.json();

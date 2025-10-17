@@ -90,3 +90,4 @@ if (-not $Docker -and -not $Archive) {
     Write-Host "- https://yoplix.ru/robots.txt" -ForegroundColor White
     Write-Host "- https://yoplix.ru/privacy" -ForegroundColor White
 }
+

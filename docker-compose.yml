@@ -29,3 +29,4 @@ services:
     depends_on:
       - yoplix
     restart: unless-stopped
+

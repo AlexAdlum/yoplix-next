@@ -3,13 +3,14 @@ import { notFound } from "next/navigation";
 import { getQuizBySlug } from "@/app/data/quizzes";
 
 interface QuizPageProps {
-  params: {
+  params: Promise<{
     slug: string;
-  };
+  }>;
 }
 
-export default function QuizPage({ params }: QuizPageProps) {
-  const quiz = getQuizBySlug(params.slug);
+export default async function QuizPage({ params }: QuizPageProps) {
+  const { slug } = await params;
+  const quiz = getQuizBySlug(slug);
 
   if (!quiz) {
     notFound();
@@ -99,13 +100,13 @@ export default function QuizPage({ params }: QuizPageProps) {
               {quiz.price > 0 ? (
                 <>
                   <Link
-                    href={`/quiz/${quiz.slug}/host`}
+                    href={`/quiz/${slug}/host`}
                     className="px-8 py-4 bg-gradient-to-r from-yellow-400 to-pink-500 text-white font-bold rounded-xl hover:scale-105 transition-transform shadow-lg text-center"
                   >
                     Перейти к запуску (оплату добавим позже)
                   </Link>
                   <Link
-                    href={`/quiz/${quiz.slug}/host`}
+                    href={`/quiz/${slug}/host`}
                     className="px-8 py-4 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-colors text-center"
                   >
                     Демо-версия
@@ -113,7 +114,7 @@ export default function QuizPage({ params }: QuizPageProps) {
                 </>
               ) : (
                 <Link
-                  href={`/quiz/${quiz.slug}/host`}
+                  href={`/quiz/${slug}/host`}
                   className="px-8 py-4 bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold rounded-xl hover:scale-105 transition-transform shadow-lg text-center"
                 >
                   Начать игру

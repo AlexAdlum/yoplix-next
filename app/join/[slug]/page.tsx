@@ -87,6 +87,11 @@ export default function JoinPage({ params }: JoinPageProps) {
   async function handleReady() {
     if (!nickname.trim()) return;
     if (!roomId) return;
+    
+    console.log('handleReady - roomId:', roomId);
+    console.log('handleReady - nickname:', nickname.trim());
+    console.log('handleReady - avatar:', avatar);
+    
     const playerId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setPlayerId(playerId);
     
@@ -95,14 +100,29 @@ export default function JoinPage({ params }: JoinPageProps) {
       nickname: nickname.trim(),
       avatar,
     };
+    
+    console.log('handleReady - sending player data:', player);
+    
     try {
-      await fetch(`/api/sessions/${roomId}/players`, {
+      const response = await fetch(`/api/sessions/${roomId}/players`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(player),
       });
-      setJoined(true);
-    } catch {}
+      
+      console.log('handleReady - response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('handleReady - response data:', data);
+        setJoined(true);
+      } else {
+        const errorData = await response.json();
+        console.error('handleReady - error response:', errorData);
+      }
+    } catch (error) {
+      console.error('handleReady - network error:', error);
+    }
   }
 
   async function handleAnswerSelect(answer: string) {

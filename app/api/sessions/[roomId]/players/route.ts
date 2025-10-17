@@ -6,7 +6,11 @@ export async function GET(
   { params }: { params: Promise<{ roomId: string }> }
 ) {
   const { roomId } = await params;
+  console.log('GET /api/sessions/[roomId]/players - roomId:', roomId);
+  
   const players = listPlayers(roomId);
+  console.log('GET /api/sessions/[roomId]/players - players:', players);
+  
   return NextResponse.json({ players }, { status: 200 });
 }
 
@@ -15,17 +19,27 @@ export async function POST(
   { params }: { params: Promise<{ roomId: string }> }
 ) {
   const { roomId } = await params;
+  console.log('POST /api/sessions/[roomId]/players - roomId:', roomId);
+  
   let body: unknown = {};
   
   try {
     body = await req.json();
-  } catch {
+    console.log('POST /api/sessions/[roomId]/players - body:', body);
+  } catch (error) {
+    console.error('POST /api/sessions/[roomId]/players - JSON parse error:', error);
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
   
   const { id, nickname, avatar } = (body as Record<string, unknown>);
+  console.log('POST /api/sessions/[roomId]/players - parsed data:', { id, nickname, avatar });
   
   if (typeof id !== "string" || typeof nickname !== "string" || typeof avatar !== "string") {
+    console.error('POST /api/sessions/[roomId]/players - validation failed:', {
+      idType: typeof id,
+      nicknameType: typeof nickname,
+      avatarType: typeof avatar
+    });
     return NextResponse.json({ 
       error: "id, nickname and avatar are required" 
     }, { status: 400 });
@@ -33,14 +47,21 @@ export async function POST(
   
   // Проверяем, что комната существует
   const room = getRoom(roomId);
+  console.log('POST /api/sessions/[roomId]/players - room:', room);
+  
   if (!room) {
+    console.error('POST /api/sessions/[roomId]/players - room not found for roomId:', roomId);
     return NextResponse.json({ 
       error: "Room not found" 
     }, { status: 404 });
   }
   
   // Добавляем игрока в комнату
+  console.log('POST /api/sessions/[roomId]/players - adding player:', { id, nickname, avatar });
   addPlayer(roomId, { id, nickname, avatar });
+  
+  const players = listPlayers(roomId);
+  console.log('POST /api/sessions/[roomId]/players - players after add:', players);
   
   return NextResponse.json({ 
     message: "Player added successfully",

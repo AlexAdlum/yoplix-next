@@ -27,19 +27,43 @@ export type PlayerScore = {
 };
 
 export async function createRoom(slug: string): Promise<Room> {
+  console.log('sessionStoreRedis - createRoom called with slug:', slug);
+  
   const roomId = `${Date.now().toString(36)}-${Math.random()
     .toString(36)
     .slice(2, 10)}`;
   const room: Room = { roomId, slug, createdAt: Date.now() };
   
-  console.log('sessionStoreRedis - creating room:', room);
+  console.log('sessionStoreRedis - created room object:', room);
   
-  await RedisStorage.setRoom(roomId, room);
-  await RedisStorage.setPlayers(roomId, []);
-  
-  console.log('sessionStoreRedis - room created and stored in Redis');
-  
-  return room;
+  try {
+    await RedisStorage.setRoom(roomId, room);
+    console.log('sessionStoreRedis - room stored in Redis successfully');
+    
+    await RedisStorage.setPlayers(roomId, []);
+    console.log('sessionStoreRedis - players list initialized');
+    
+    // Verify the room was stored correctly
+    const storedRoom = await RedisStorage.getRoom(roomId);
+    console.log('sessionStoreRedis - verification - room retrieved:', storedRoom ? 'YES' : 'NO');
+    
+    if (storedRoom) {
+      console.log('sessionStoreRedis - verification - stored room details:', {
+        roomId: storedRoom.roomId,
+        slug: storedRoom.slug,
+        createdAt: storedRoom.createdAt
+      });
+    } else {
+      console.error('sessionStoreRedis - CRITICAL: Room was not stored correctly!');
+      throw new Error('Failed to store room in Redis');
+    }
+    
+    console.log('sessionStoreRedis - room created and stored successfully:', room);
+    return room;
+  } catch (error) {
+    console.error('sessionStoreRedis - error creating room:', error);
+    throw error;
+  }
 }
 
 export async function getRoom(roomId: string): Promise<Room | null> {

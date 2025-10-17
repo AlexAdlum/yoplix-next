@@ -26,16 +26,27 @@ export async function POST(req: NextRequest) {
   }
   
   console.log('POST /api/sessions - creating room for slug:', slug);
-  const room = await createRoom(slug);
-  console.log('POST /api/sessions - created room:', room);
   
-  return NextResponse.json({ roomId: room.roomId }, { 
-    status: 201,
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'X-Content-Type-Options': 'nosniff',
-    }
-  });
+  try {
+    const room = await createRoom(slug);
+    console.log('POST /api/sessions - created room:', room);
+    console.log('POST /api/sessions - room details:', {
+      roomId: room.roomId,
+      slug: room.slug,
+      createdAt: room.createdAt
+    });
+    
+    return NextResponse.json({ roomId: room.roomId }, { 
+      status: 201,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Content-Type-Options': 'nosniff',
+      }
+    });
+  } catch (error) {
+    console.error('POST /api/sessions - error creating room:', error);
+    return NextResponse.json({ error: "Failed to create room" }, { status: 500 });
+  }
 }
 
 

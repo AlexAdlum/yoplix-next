@@ -218,22 +218,22 @@ export default function HostPage({ params }: HostPageProps) {
               
               <button
                 onClick={async () => {
-                  if (!roomId) return;
+                  if (!roomId) {
+                    console.error('No roomId available');
+                    return;
+                  }
+                  console.log('Starting quiz for roomId:', roomId, 'slug:', params.slug);
                   try {
                     const res = await fetch(`/api/sessions/${roomId}/quiz`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ action: "start", slug: params.slug }),
                     });
+                    console.log('Quiz start response status:', res.status);
                     if (res.ok) {
                       setStarted(true);
-                      console.log('Quiz started successfully, notifying players...');
-                      // Уведомляем игроков о начале викторины
-                      const channel = new BroadcastChannel(`yoplix-game-${roomId}`);
-                      console.log('BroadcastChannel created:', `yoplix-game-${roomId}`);
-                      channel.postMessage({ type: "quiz:started" });
-                      console.log('Message sent to players');
-                      channel.close();
+                      console.log('Quiz started successfully');
+                      // Игроки будут проверять статус игры через polling
                     } else {
                       const error = await res.json();
                       console.error('Quiz start error:', error);

@@ -1,8 +1,15 @@
 // Простое in-memory хранилище для локальной разработки
 // В продакшене будет использоваться Upstash Redis
 
-// In-memory хранилище
-const memoryStore = new Map<string, string>();
+// Используем глобальное хранилище для сохранения между запросами
+declare global {
+  var __yoplixMemoryStore: Map<string, string> | undefined;
+}
+
+const memoryStore = globalThis.__yoplixMemoryStore || new Map<string, string>();
+if (!globalThis.__yoplixMemoryStore) {
+  globalThis.__yoplixMemoryStore = memoryStore;
+}
 
 // Mock Redis интерфейс
 const redis = {

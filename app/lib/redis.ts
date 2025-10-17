@@ -39,7 +39,17 @@ if (isProduction && hasUpstashConfig) {
       get: async (key: string) => {
         const result = await upstashRedis.get(key);
         console.log('Upstash Redis: get', key, result ? 'found' : 'not found');
-        return result as string | null;
+        console.log('Upstash Redis: get result type:', typeof result, result);
+        
+        // Upstash Redis может вернуть уже распарсенный объект
+        if (typeof result === 'string') {
+          return result;
+        } else if (typeof result === 'object' && result !== null) {
+          // Если это объект, сериализуем его обратно в JSON
+          return JSON.stringify(result);
+        } else {
+          return result as string | null;
+        }
       },
       del: async (key: string) => {
         const result = await upstashRedis.del(key);
@@ -154,7 +164,13 @@ export class RedisStorage {
     const key = this.getRoomKey(roomId);
     const data = await redis.get(key);
     if (!data) return null;
-    return JSON.parse(data as string);
+    
+    try {
+      return JSON.parse(data as string);
+    } catch (error) {
+      console.error('Redis - getRoom JSON parse error:', error, 'data:', data);
+      return null;
+    }
   }
   
   static async deleteRoom(roomId: string) {
@@ -174,7 +190,13 @@ export class RedisStorage {
     const key = this.getPlayersKey(roomId);
     const data = await redis.get(key);
     if (!data) return [];
-    return JSON.parse(data as string);
+    
+    try {
+      return JSON.parse(data as string);
+    } catch (error) {
+      console.error('Redis - getPlayers JSON parse error:', error, 'data:', data);
+      return [];
+    }
   }
   
   static async addPlayer(roomId: string, player: Record<string, unknown>) {
@@ -206,14 +228,21 @@ export class RedisStorage {
     console.log('Redis - getGameSession - key:', key);
     const data = await redis.get(key);
     console.log('Redis - getGameSession - data found:', data ? 'YES' : 'NO');
+    console.log('Redis - getGameSession - data type:', typeof data, data);
     if (!data) return null;
-    const parsed = JSON.parse(data as string);
-    console.log('Redis - getGameSession - parsed session:', {
-      isActive: parsed.isActive,
-      isGameStarted: parsed.isGameStarted,
-      questionsCount: Array.isArray(parsed.questions) ? parsed.questions.length : 0
-    });
-    return parsed;
+    
+    try {
+      const parsed = JSON.parse(data as string);
+      console.log('Redis - getGameSession - parsed session:', {
+        isActive: parsed.isActive,
+        isGameStarted: parsed.isGameStarted,
+        questionsCount: Array.isArray(parsed.questions) ? parsed.questions.length : 0
+      });
+      return parsed;
+    } catch (error) {
+      console.error('Redis - getGameSession JSON parse error:', error, 'data:', data);
+      return null;
+    }
   }
   
   static async deleteGameSession(roomId: string) {
@@ -233,7 +262,13 @@ export class RedisStorage {
     const key = `${this.getAnswersKey(roomId)}:${playerId}`;
     const data = await redis.get(key);
     if (!data) return [];
-    return JSON.parse(data as string);
+    
+    try {
+      return JSON.parse(data as string);
+    } catch (error) {
+      console.error('Redis - getPlayerAnswers JSON parse error:', error, 'data:', data);
+      return [];
+    }
   }
   
   static async addPlayerAnswer(roomId: string, playerId: string, answer: Record<string, unknown>) {
@@ -251,7 +286,11 @@ export class RedisStorage {
     for (const key of keys) {
       const data = await redis.get(key);
       if (data) {
-        rooms.push(JSON.parse(data as string));
+        try {
+          rooms.push(JSON.parse(data as string));
+        } catch (error) {
+          console.error('Redis - getAllRooms JSON parse error for key:', key, error, 'data:', data);
+        }
       }
     }
     return rooms;

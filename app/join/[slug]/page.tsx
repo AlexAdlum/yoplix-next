@@ -129,8 +129,14 @@ export default function JoinPage({ params }: JoinPageProps) {
   }
 
   async function handleReady() {
-    if (!nickname.trim()) return;
-    if (!roomId) return;
+    if (!nickname.trim()) {
+      console.log('handleReady - nickname is empty');
+      return;
+    }
+    if (!roomId) {
+      console.log('handleReady - no roomId');
+      return;
+    }
     
     console.log('handleReady - roomId:', roomId);
     console.log('handleReady - nickname:', nickname.trim());
@@ -150,7 +156,10 @@ export default function JoinPage({ params }: JoinPageProps) {
     try {
       const response = await fetch(`/api/sessions/${roomId}/players`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'Cache-Control': 'no-cache',
+        },
         body: JSON.stringify(player),
       });
       
@@ -160,12 +169,15 @@ export default function JoinPage({ params }: JoinPageProps) {
         const data = await response.json();
         console.log('handleReady - response data:', data);
         setJoined(true);
+        console.log('handleReady - player joined successfully');
       } else {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
         console.error('handleReady - error response:', errorData);
+        alert(`Ошибка присоединения: ${errorData.error || 'Неизвестная ошибка'}`);
       }
     } catch (error) {
       console.error('handleReady - network error:', error);
+      alert('Ошибка сети при присоединении к игре');
     }
   }
 

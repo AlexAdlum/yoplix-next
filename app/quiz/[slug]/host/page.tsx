@@ -18,6 +18,8 @@ export default function HostPage({ params }: HostPageProps) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [started, setStarted] = useState(false);
   const [roomId, setRoomId] = useState<string>("");
+  const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  
   const joinUrl = useMemo(() => {
     if (typeof window === "undefined" || !roomId) return "";
     const base = window.location.origin;
@@ -29,8 +31,11 @@ export default function HostPage({ params }: HostPageProps) {
   useEffect(() => {
     // Ensure room exists (create once per host screen open)
     async function ensureRoom() {
-      if (roomId) return;
+      if (roomId || isCreatingRoom) return;
+      
+      setIsCreatingRoom(true);
       console.log('Attempting to create room for slug:', params.slug);
+      
       try {
         const res = await fetch(`/api/sessions`, {
           method: "POST",
@@ -38,6 +43,7 @@ export default function HostPage({ params }: HostPageProps) {
           body: JSON.stringify({ slug: params.slug }),
         });
         console.log('Room creation response status:', res.status);
+        
         if (res.ok) {
           const data = (await res.json()) as { roomId: string };
           console.log('Room created successfully:', data.roomId);
@@ -48,6 +54,8 @@ export default function HostPage({ params }: HostPageProps) {
         }
       } catch (error) {
         console.error('Error creating room:', error);
+      } finally {
+        setIsCreatingRoom(false);
       }
     }
     ensureRoom();
@@ -55,15 +63,28 @@ export default function HostPage({ params }: HostPageProps) {
     async function fetchPlayers() {
       if (!roomId) return;
       try {
+        console.log('Fetching players for roomId:', roomId);
         const res = await fetch(`/api/sessions/${roomId}/players`, {
           cache: "no-store",
+          headers: {
+            'Cache-Control': 'no-cache',
+          }
         });
+        
+        console.log('Fetch players response status:', res.status);
+        
         if (res.ok) {
           const data = (await res.json()) as { players: Player[] };
+          console.log('Players fetched:', data.players.length);
           setPlayers(data.players);
+        } else {
+          console.error('Failed to fetch players, status:', res.status);
+          const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
+          console.error('Fetch players error:', errorData);
         }
       } catch (error) {
         console.error('Error fetching players:', error);
+        // Не очищаем список игроков при ошибке сети
       }
     }
     fetchPlayers();
@@ -71,7 +92,7 @@ export default function HostPage({ params }: HostPageProps) {
     return () => {
       window.clearInterval(timer);
     };
-  }, [params.slug, roomId]);
+  }, [params.slug, roomId, isCreatingRoom]);
 
   if (!quiz) {
     return (

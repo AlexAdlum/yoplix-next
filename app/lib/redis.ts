@@ -23,33 +23,69 @@ if (isProduction && hasUpstashConfig) {
     hasUrl: !!process.env.UPSTASH_REDIS_REST_URL,
     hasToken: !!process.env.UPSTASH_REDIS_REST_TOKEN
   });
-  const upstashRedis = new Redis({
-    url: process.env.UPSTASH_REDIS_REST_URL!,
-    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-  });
   
-  redis = {
-    set: async (key: string, value: string) => {
-      const result = await upstashRedis.set(key, value);
-      console.log('Upstash Redis: set', key, result);
-      return result;
-    },
-    get: async (key: string) => {
-      const result = await upstashRedis.get(key);
-      console.log('Upstash Redis: get', key, result ? 'found' : 'not found');
-      return result as string | null;
-    },
-    del: async (key: string) => {
-      const result = await upstashRedis.del(key);
-      console.log('Upstash Redis: del', key, result);
-      return result;
-    },
-    keys: async (pattern: string) => {
-      const result = await upstashRedis.keys(pattern);
-      console.log('Upstash Redis: keys', pattern, result.length);
-      return result;
-    },
-  };
+  try {
+    const upstashRedis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    });
+  
+    redis = {
+      set: async (key: string, value: string) => {
+        const result = await upstashRedis.set(key, value);
+        console.log('Upstash Redis: set', key, result);
+        return result;
+      },
+      get: async (key: string) => {
+        const result = await upstashRedis.get(key);
+        console.log('Upstash Redis: get', key, result ? 'found' : 'not found');
+        return result as string | null;
+      },
+      del: async (key: string) => {
+        const result = await upstashRedis.del(key);
+        console.log('Upstash Redis: del', key, result);
+        return result;
+      },
+      keys: async (pattern: string) => {
+        const result = await upstashRedis.keys(pattern);
+        console.log('Upstash Redis: keys', pattern, result.length);
+        return result;
+      },
+    };
+  } catch (error) {
+    console.error('Failed to initialize Upstash Redis, falling back to memory storage:', error);
+    // Fallback to memory storage
+    const memoryStore = (globalThis as Record<string, unknown>).__yoplixMemoryStore as Map<string, string> || new Map<string, string>();
+    if (!(globalThis as Record<string, unknown>).__yoplixMemoryStore) {
+      (globalThis as Record<string, unknown>).__yoplixMemoryStore = memoryStore;
+    }
+    
+    redis = {
+      set: async (key: string, value: string) => {
+        memoryStore.set(key, value);
+        console.log('Memory Redis (fallback): set', key);
+        return 'OK';
+      },
+      get: async (key: string) => {
+        const value = memoryStore.get(key);
+        console.log('Memory Redis (fallback): get', key, value ? 'found' : 'not found');
+        return value || null;
+      },
+      del: async (key: string) => {
+        const existed = memoryStore.has(key);
+        memoryStore.delete(key);
+        console.log('Memory Redis (fallback): del', key);
+        return existed ? 1 : 0;
+      },
+      keys: async (pattern: string) => {
+        const keys = Array.from(memoryStore.keys()).filter((key) => 
+          pattern.includes('*') ? (key as string).startsWith(pattern.replace('*', '')) : (key as string) === pattern
+        ) as string[];
+        console.log('Memory Redis (fallback): keys', pattern, keys.length);
+        return keys;
+      },
+    };
+  }
 } else {
   // Используем in-memory хранилище для разработки
   console.log('Using in-memory storage for development');

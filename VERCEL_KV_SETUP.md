@@ -1,24 +1,25 @@
-# Настройка Vercel KV
+# Настройка Upstash Redis
 
-Для работы с Redis хранилищем необходимо настроить Vercel KV:
+Для работы с Redis хранилищем необходимо настроить Upstash Redis:
 
-## 1. Установка Vercel KV
+## 1. Установка Upstash Redis
 
-Vercel KV уже установлен в проекте:
+Upstash Redis уже установлен в проекте:
 ```bash
-npm install @vercel/kv
+npm install @upstash/redis
 ```
 
-## 2. Настройка в Vercel Dashboard
+## 2. Настройка в Upstash Dashboard
 
-1. Перейдите в [Vercel Dashboard](https://vercel.com/dashboard)
-2. Выберите ваш проект `yoplix-next`
-3. Перейдите в раздел "Storage"
-4. Создайте новую KV базу данных
-5. Скопируйте переменные окружения:
-   - `KV_REST_API_URL`
-   - `KV_REST_API_TOKEN`
-   - `KV_REST_API_READ_ONLY_TOKEN`
+1. Перейдите на [upstash.com](https://upstash.com)
+2. Войдите в аккаунт (можно через GitHub)
+3. Нажмите "Create Database"
+4. Выберите "Global" и регион "eu-west-1"
+5. Введите название: `yoplix-redis`
+6. Нажмите "Create"
+7. Скопируйте переменные окружения:
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
 
 ## 3. Установка переменных окружения
 
@@ -26,18 +27,16 @@ npm install @vercel/kv
 1. Перейдите в Settings → Environment Variables
 2. Добавьте следующие переменные:
    ```
-   KV_REST_API_URL=your_kv_rest_api_url_here
-   KV_REST_API_TOKEN=your_kv_rest_api_token_here
-   KV_REST_API_READ_ONLY_TOKEN=your_kv_read_only_token_here
+   UPSTASH_REDIS_REST_URL=your_upstash_rest_url_here
+   UPSTASH_REDIS_REST_TOKEN=your_upstash_rest_token_here
    ```
 
 ## 4. Локальная разработка
 
 Для локальной разработки создайте файл `.env.local`:
 ```bash
-KV_REST_API_URL=your_kv_rest_api_url_here
-KV_REST_API_TOKEN=your_kv_rest_api_token_here
-KV_REST_API_READ_ONLY_TOKEN=your_kv_read_only_token_here
+UPSTASH_REDIS_REST_URL=your_upstash_rest_url_here
+UPSTASH_REDIS_REST_TOKEN=your_upstash_rest_token_here
 ```
 
 ## 5. Проверка работы

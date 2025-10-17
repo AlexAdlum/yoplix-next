@@ -1,4 +1,10 @@
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
+
+// Создаем экземпляр Redis для Upstash
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
 
 // Утилиты для работы с Redis
 export class RedisStorage {
@@ -22,33 +28,33 @@ export class RedisStorage {
   // Работа с комнатами
   static async setRoom(roomId: string, room: Record<string, unknown>) {
     const key = this.getRoomKey(roomId);
-    await kv.set(key, JSON.stringify(room));
+    await redis.set(key, JSON.stringify(room));
     console.log('Redis - room stored:', roomId);
   }
   
   static async getRoom(roomId: string) {
     const key = this.getRoomKey(roomId);
-    const data = await kv.get(key);
+    const data = await redis.get(key);
     if (!data) return null;
     return JSON.parse(data as string);
   }
   
   static async deleteRoom(roomId: string) {
     const key = this.getRoomKey(roomId);
-    await kv.del(key);
+    await redis.del(key);
     console.log('Redis - room deleted:', roomId);
   }
 
   // Работа с игроками
   static async setPlayers(roomId: string, players: Record<string, unknown>[]) {
     const key = this.getPlayersKey(roomId);
-    await kv.set(key, JSON.stringify(players));
+    await redis.set(key, JSON.stringify(players));
     console.log('Redis - players stored:', roomId, players.length);
   }
   
   static async getPlayers(roomId: string) {
     const key = this.getPlayersKey(roomId);
-    const data = await kv.get(key);
+    const data = await redis.get(key);
     if (!data) return [];
     return JSON.parse(data as string);
   }
@@ -67,33 +73,33 @@ export class RedisStorage {
   // Работа с игровыми сессиями
   static async setGameSession(roomId: string, session: Record<string, unknown>) {
     const key = this.getGameSessionKey(roomId);
-    await kv.set(key, JSON.stringify(session));
+    await redis.set(key, JSON.stringify(session));
     console.log('Redis - game session stored:', roomId);
   }
   
   static async getGameSession(roomId: string) {
     const key = this.getGameSessionKey(roomId);
-    const data = await kv.get(key);
+    const data = await redis.get(key);
     if (!data) return null;
     return JSON.parse(data as string);
   }
   
   static async deleteGameSession(roomId: string) {
     const key = this.getGameSessionKey(roomId);
-    await kv.del(key);
+    await redis.del(key);
     console.log('Redis - game session deleted:', roomId);
   }
 
   // Работа с ответами игроков
   static async setPlayerAnswers(roomId: string, playerId: string, answers: Record<string, unknown>[]) {
     const key = `${this.getAnswersKey(roomId)}:${playerId}`;
-    await kv.set(key, JSON.stringify(answers));
+    await redis.set(key, JSON.stringify(answers));
     console.log('Redis - player answers stored:', roomId, playerId, answers.length);
   }
   
   static async getPlayerAnswers(roomId: string, playerId: string) {
     const key = `${this.getAnswersKey(roomId)}:${playerId}`;
-    const data = await kv.get(key);
+    const data = await redis.get(key);
     if (!data) return [];
     return JSON.parse(data as string);
   }
@@ -108,10 +114,10 @@ export class RedisStorage {
 
   // Получение всех комнат (для отладки)
   static async getAllRooms() {
-    const keys = await kv.keys('room:*');
+    const keys = await redis.keys('room:*');
     const rooms = [];
     for (const key of keys) {
-      const data = await kv.get(key);
+      const data = await redis.get(key);
       if (data) {
         rooms.push(JSON.parse(data as string));
       }

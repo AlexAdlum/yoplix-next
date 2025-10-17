@@ -13,6 +13,7 @@
     "deploy": "npm run build && npm run start"
   },
   "dependencies": {
+    "@upstash/redis": "^1.35.6",
     "@vercel/kv": "^3.0.0",
     "next": "15.5.5",
     "react": "19.1.0",

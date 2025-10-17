@@ -55,8 +55,12 @@ function seededShuffle<T>(array: T[], seed: number): T[] {
 }
 
 export function startQuiz(roomId: string, slug: string): GameSession {
+  console.log('startQuiz - roomId:', roomId, 'slug:', slug);
+  
   // Фильтруем вопросы по slug и механике
   const filteredQuestions = questionsData.filter((q: unknown) => (q as Question).Slug === slug) as Question[];
+  
+  console.log('startQuiz - filtered questions count:', filteredQuestions.length);
   
   if (filteredQuestions.length === 0) {
     throw new Error(`No questions found for quiz: ${slug}`);
@@ -66,12 +70,19 @@ export function startQuiz(roomId: string, slug: string): GameSession {
   const mechanicsType = filteredQuestions[0]?.mechanicsType;
   const mechanics = mechanicsData.find((m: Mechanics) => m.mechanicsType === mechanicsType) || null;
   
+  console.log('startQuiz - mechanicsType:', mechanicsType);
+  
   // Создаем seed на основе roomId для консистентной случайности
   const seed = roomId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  
+  console.log('startQuiz - seed:', seed);
   
   // Выбираем 15 случайных вопросов для этой сессии с использованием seed
   const shuffled = seededShuffle(filteredQuestions, seed);
   const selectedQuestions = shuffled.slice(0, 15);
+  
+  console.log('startQuiz - selected questions count:', selectedQuestions.length);
+  console.log('startQuiz - selected question IDs:', selectedQuestions.map(q => q.questionID));
   
   const session: GameSession = {
     roomId,
@@ -84,6 +95,7 @@ export function startQuiz(roomId: string, slug: string): GameSession {
   };
   
   gameSessions.set(roomId, session);
+  console.log('startQuiz - session created:', session);
   return session;
 }
 
@@ -100,19 +112,34 @@ export function getGameSession(roomId: string): GameSession | null {
 }
 
 export function nextQuestion(roomId: string): Question | null {
+  console.log('nextQuestion - roomId:', roomId);
+  
   const session = gameSessions.get(roomId);
-  if (!session || !session.isActive) return null;
+  console.log('nextQuestion - session:', session);
+  
+  if (!session || !session.isActive) {
+    console.log('nextQuestion - no active session');
+    return null;
+  }
+  
+  console.log('nextQuestion - current index:', session.currentQuestionIndex, 'total questions:', session.questions.length);
   
   session.currentQuestionIndex++;
   session.questionStartTime = Date.now();
   
+  console.log('nextQuestion - new index:', session.currentQuestionIndex);
+  
   if (session.currentQuestionIndex >= session.questions.length) {
     // Викторина завершена
+    console.log('nextQuestion - quiz finished!');
     session.isActive = false;
     return null;
   }
   
-  return session.questions[session.currentQuestionIndex];
+  const nextQuestion = session.questions[session.currentQuestionIndex];
+  console.log('nextQuestion - returning question ID:', nextQuestion.questionID);
+  
+  return nextQuestion;
 }
 
 export function generateRandomAnswers(question: Question, roomId?: string): string[] {

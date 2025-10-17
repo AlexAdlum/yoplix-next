@@ -1,42 +1,84 @@
-// Простое in-memory хранилище для локальной разработки
-// В продакшене будет использоваться Upstash Redis
+// Гибридное хранилище: Upstash Redis для продакшена, in-memory для разработки
+import { Redis } from '@upstash/redis';
 
-// Используем глобальное хранилище для сохранения между запросами
-declare global {
-  var __yoplixMemoryStore: Map<string, string> | undefined;
-}
+// Проверяем, работаем ли мы в продакшене с Upstash Redis
+const isProduction = process.env.NODE_ENV === 'production';
+const hasUpstashConfig = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
 
-const memoryStore = globalThis.__yoplixMemoryStore || new Map<string, string>();
-if (!globalThis.__yoplixMemoryStore) {
-  globalThis.__yoplixMemoryStore = memoryStore;
-}
-
-// Mock Redis интерфейс
-const redis = {
-  set: async (key: string, value: string) => {
-    memoryStore.set(key, value);
-    console.log('Memory Redis: set', key);
-    return 'OK';
-  },
-  get: async (key: string) => {
-    const value = memoryStore.get(key);
-    console.log('Memory Redis: get', key, value ? 'found' : 'not found');
-    return value || null;
-  },
-  del: async (key: string) => {
-    const existed = memoryStore.has(key);
-    memoryStore.delete(key);
-    console.log('Memory Redis: del', key);
-    return existed ? 1 : 0;
-  },
-  keys: async (pattern: string) => {
-    const keys = Array.from(memoryStore.keys()).filter((key: string) => 
-      pattern.includes('*') ? key.startsWith(pattern.replace('*', '')) : key === pattern
-    );
-    console.log('Memory Redis: keys', pattern, keys.length);
-    return keys;
-  },
+let redis: {
+  set: (key: string, value: string) => Promise<string | null>;
+  get: (key: string) => Promise<string | null>;
+  del: (key: string) => Promise<number>;
+  keys: (pattern: string) => Promise<string[]>;
 };
+
+if (isProduction && hasUpstashConfig) {
+  // Используем Upstash Redis в продакшене
+  console.log('Using Upstash Redis for production');
+  const upstashRedis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  });
+  
+  redis = {
+    set: async (key: string, value: string) => {
+      const result = await upstashRedis.set(key, value);
+      console.log('Upstash Redis: set', key, result);
+      return result;
+    },
+    get: async (key: string) => {
+      const result = await upstashRedis.get(key);
+      console.log('Upstash Redis: get', key, result ? 'found' : 'not found');
+      return result as string | null;
+    },
+    del: async (key: string) => {
+      const result = await upstashRedis.del(key);
+      console.log('Upstash Redis: del', key, result);
+      return result;
+    },
+    keys: async (pattern: string) => {
+      const result = await upstashRedis.keys(pattern);
+      console.log('Upstash Redis: keys', pattern, result.length);
+      return result;
+    },
+  };
+} else {
+  // Используем in-memory хранилище для разработки
+  console.log('Using in-memory storage for development');
+  
+  // Используем глобальное хранилище для сохранения между запросами
+  const memoryStore = (globalThis as Record<string, unknown>).__yoplixMemoryStore as Map<string, string> || new Map<string, string>();
+  if (!(globalThis as Record<string, unknown>).__yoplixMemoryStore) {
+    (globalThis as Record<string, unknown>).__yoplixMemoryStore = memoryStore;
+  }
+  
+  redis = {
+    set: async (key: string, value: string) => {
+      memoryStore.set(key, value);
+      console.log('Memory Redis: set', key);
+      return 'OK';
+    },
+    get: async (key: string) => {
+      const value = memoryStore.get(key);
+      console.log('Memory Redis: get', key, value ? 'found' : 'not found');
+      return value || null;
+    },
+    del: async (key: string) => {
+      const existed = memoryStore.has(key);
+      memoryStore.delete(key);
+      console.log('Memory Redis: del', key);
+      return existed ? 1 : 0;
+    },
+    keys: async (pattern: string) => {
+      const keys = Array.from(memoryStore.keys()).filter((key) => 
+        pattern.includes('*') ? (key as string).startsWith(pattern.replace('*', '')) : (key as string) === pattern
+      ) as string[];
+      console.log('Memory Redis: keys', pattern, keys.length);
+      return keys;
+    },
+  };
+}
+
 
 // Утилиты для работы с Redis
 export class RedisStorage {

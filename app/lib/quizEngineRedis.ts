@@ -51,6 +51,11 @@ function seededShuffle<T>(array: T[], seed: number): T[] {
 
 export async function startQuiz(roomId: string, slug: string): Promise<GameSession> {
   console.log('quizEngineRedis - startQuiz - roomId:', roomId, 'slug:', slug);
+  console.log('quizEngineRedis - environment check:', {
+    NODE_ENV: process.env.NODE_ENV,
+    hasUpstashUrl: !!process.env.UPSTASH_REDIS_REST_URL,
+    hasUpstashToken: !!process.env.UPSTASH_REDIS_REST_TOKEN
+  });
   
   // Фильтруем вопросы по slug и механике
   const filteredQuestions = questionsData.filter((q: unknown) => (q as Question).Slug === slug) as Question[];

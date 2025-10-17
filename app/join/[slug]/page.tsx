@@ -28,6 +28,7 @@ export default function JoinPage({ params }: JoinPageProps) {
   const [showResult, setShowResult] = useState<boolean>(false);
   const [isCorrect, setIsCorrect] = useState<boolean>(false);
   const [playerScore, setPlayerScore] = useState<number>(0);
+  const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
 
   const channelName = useMemo(() => `yoplix-join-${params.slug}`, [params.slug]);
 
@@ -35,7 +36,13 @@ export default function JoinPage({ params }: JoinPageProps) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const room = new URLSearchParams(window.location.search).get("room");
-    if (room) setRoomId(room);
+    console.log('Join page - extracted room from URL:', room);
+    if (room) {
+      setRoomId(room);
+      console.log('Join page - roomId set to:', room);
+    } else {
+      console.error('Join page - no room parameter in URL');
+    }
   }, []);
 
   const loadCurrentQuestion = useCallback(async () => {
@@ -131,16 +138,41 @@ export default function JoinPage({ params }: JoinPageProps) {
   async function handleReady() {
     if (!nickname.trim()) {
       console.log('handleReady - nickname is empty');
+      alert('Введите имя игрока');
       return;
     }
     if (!roomId) {
       console.log('handleReady - no roomId');
+      alert('Комната не найдена. Проверьте ссылку.');
       return;
     }
     
     console.log('handleReady - roomId:', roomId);
     console.log('handleReady - nickname:', nickname.trim());
     console.log('handleReady - avatar:', avatar);
+    
+    // Сначала проверим, существует ли комната
+    try {
+      console.log('handleReady - checking if room exists...');
+      const roomCheckResponse = await fetch(`/api/sessions/${roomId}/players`, {
+        method: "GET",
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      
+      console.log('handleReady - room check response status:', roomCheckResponse.status);
+      
+      if (!roomCheckResponse.ok) {
+        console.error('handleReady - room does not exist');
+        alert('Комната не найдена или была закрыта');
+        return;
+      }
+      
+      console.log('handleReady - room exists, proceeding with join');
+    } catch (error) {
+      console.error('handleReady - error checking room:', error);
+      alert('Ошибка проверки комнаты');
+      return;
+    }
     
     const playerId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     setPlayerId(playerId);
@@ -182,14 +214,21 @@ export default function JoinPage({ params }: JoinPageProps) {
   }
 
   async function handleAnswerSelect(answer: string) {
-    if (!roomId || !playerId || !currentQuestion) return;
+    if (!roomId || !playerId || !currentQuestion || isSubmittingAnswer) {
+      console.log('handleAnswerSelect - blocked:', { roomId: !!roomId, playerId: !!playerId, currentQuestion: !!currentQuestion, isSubmittingAnswer });
+      return;
+    }
     
+    setIsSubmittingAnswer(true);
     console.log('handleAnswerSelect - submitting answer:', answer);
     
     try {
       const res = await fetch(`/api/sessions/${roomId}/answers`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'Cache-Control': 'no-cache'
+        },
         body: JSON.stringify({ playerId, answer }),
       });
       
@@ -206,13 +245,18 @@ export default function JoinPage({ params }: JoinPageProps) {
         setTimeout(() => {
           console.log('Hiding result...');
           setShowResult(false);
+          setIsSubmittingAnswer(false);
         }, 3000);
       } else {
-        const errorData = await res.json();
+        const errorData = await res.json().catch(() => ({ error: 'Failed to parse error response' }));
         console.error('handleAnswerSelect - error response:', errorData);
+        alert(`Ошибка отправки ответа: ${errorData.error || 'Неизвестная ошибка'}`);
+        setIsSubmittingAnswer(false);
       }
     } catch (error) {
       console.error('handleAnswerSelect - network error:', error);
+      alert('Ошибка сети при отправке ответа');
+      setIsSubmittingAnswer(false);
     }
   }
 
@@ -308,7 +352,12 @@ export default function JoinPage({ params }: JoinPageProps) {
                       <button
                         key={index}
                         onClick={() => handleAnswerSelect(answer)}
-                        className="p-4 text-left bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors border border-gray-200"
+                        disabled={isSubmittingAnswer}
+                        className={`p-4 text-left rounded-xl transition-colors border ${
+                          isSubmittingAnswer 
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border-gray-200' 
+                            : 'bg-gray-50 hover:bg-gray-100 border-gray-200'
+                        }`}
                       >
                         {answer}
                       </button>

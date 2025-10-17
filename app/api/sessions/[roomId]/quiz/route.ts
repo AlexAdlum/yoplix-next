@@ -96,7 +96,9 @@ export async function GET(
   
   // Обычная логика получения вопроса
   const question = getCurrentQuestion(roomId);
-  if (!question) {
+  const session = getGameSession(roomId);
+  
+  if (!question || !session) {
     return NextResponse.json({ 
       finished: true,
       message: "No active question" 
@@ -110,5 +112,11 @@ export async function GET(
       ...question,
       answers,
     },
+    currentQuestion: session.currentQuestionIndex + 1,
+    totalQuestions: session.questions.length,
+    session: {
+      isActive: session.isActive,
+      isGameStarted: session.isGameStarted,
+    }
   });
 }

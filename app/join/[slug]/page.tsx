@@ -98,6 +98,28 @@ export default function JoinPage({ params }: JoinPageProps) {
     };
   }, [roomId, started, checkGameStatus]);
 
+  // Polling для получения текущего вопроса во время игры
+  useEffect(() => {
+    if (!roomId || !started) return;
+    
+    console.log('Setting up question polling for roomId:', roomId);
+    
+    // Проверяем вопрос сразу
+    loadCurrentQuestion();
+    
+    // Устанавливаем интервал для проверки текущего вопроса
+    const interval = setInterval(async () => {
+      if (!showResult) { // Проверяем только если не показываем результат ответа
+        await loadCurrentQuestion();
+      }
+    }, 2000); // Проверяем каждые 2 секунды
+    
+    return () => {
+      console.log('Cleaning up question polling');
+      clearInterval(interval);
+    };
+  }, [roomId, started, showResult, loadCurrentQuestion]);
+
   if (!quiz) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -150,6 +172,8 @@ export default function JoinPage({ params }: JoinPageProps) {
   async function handleAnswerSelect(answer: string) {
     if (!roomId || !playerId || !currentQuestion) return;
     
+    console.log('handleAnswerSelect - submitting answer:', answer);
+    
     try {
       const res = await fetch(`/api/sessions/${roomId}/answers`, {
         method: "POST",
@@ -157,20 +181,29 @@ export default function JoinPage({ params }: JoinPageProps) {
         body: JSON.stringify({ playerId, answer }),
       });
       
+      console.log('handleAnswerSelect - response status:', res.status);
+      
       if (res.ok) {
         const data = await res.json();
+        console.log('handleAnswerSelect - response data:', data);
         setIsCorrect(data.isCorrect);
         setPlayerScore(data.totalScore);
         setShowResult(true);
         
-        // Через 3 секунды переходим к следующему вопросу
-        setTimeout(async () => {
+        // Через 3 секунды просто скрываем результат
+        setTimeout(() => {
+          console.log('Hiding result...');
           setShowResult(false);
-          await loadCurrentQuestion();
         }, 3000);
+      } else {
+        const errorData = await res.json();
+        console.error('handleAnswerSelect - error response:', errorData);
       }
-    } catch {}
+    } catch (error) {
+      console.error('handleAnswerSelect - network error:', error);
+    }
   }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-pink-50">

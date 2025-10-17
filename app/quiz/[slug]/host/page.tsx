@@ -151,7 +151,42 @@ export default function HostPage({ params }: HostPageProps) {
               </ul>
             )}
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex justify-end gap-3">
+              {started && (
+                <button
+                  onClick={async () => {
+                    if (!roomId) return;
+                    try {
+                      console.log('Moving to next question...');
+                      const res = await fetch(`/api/sessions/${roomId}/quiz`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action: "next" }),
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        if (data.finished) {
+                          console.log('Quiz finished!');
+                          alert('Викторина завершена!');
+                        } else {
+                          console.log('Next question loaded');
+                        }
+                      } else {
+                        const error = await res.json();
+                        console.error('Next question error:', error);
+                        alert(`Ошибка перехода к следующему вопросу: ${error.error || 'Неизвестная ошибка'}`);
+                      }
+                    } catch (error) {
+                      console.error('Network error:', error);
+                      alert('Ошибка сети при переходе к следующему вопросу');
+                    }
+                  }}
+                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold rounded-xl transition-transform shadow-lg hover:scale-105"
+                >
+                  Следующий вопрос
+                </button>
+              )}
+              
               <button
                 onClick={async () => {
                   if (!roomId) return;

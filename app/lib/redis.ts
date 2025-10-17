@@ -98,15 +98,29 @@ export class RedisStorage {
   // Работа с игровыми сессиями
   static async setGameSession(roomId: string, session: Record<string, unknown>) {
     const key = this.getGameSessionKey(roomId);
+    console.log('Redis - setGameSession - key:', key);
+    console.log('Redis - setGameSession - session data:', {
+      isActive: session.isActive,
+      isGameStarted: session.isGameStarted,
+      questionsCount: Array.isArray(session.questions) ? session.questions.length : 0
+    });
     await redis.set(key, JSON.stringify(session));
     console.log('Redis - game session stored:', roomId);
   }
   
   static async getGameSession(roomId: string) {
     const key = this.getGameSessionKey(roomId);
+    console.log('Redis - getGameSession - key:', key);
     const data = await redis.get(key);
+    console.log('Redis - getGameSession - data found:', data ? 'YES' : 'NO');
     if (!data) return null;
-    return JSON.parse(data as string);
+    const parsed = JSON.parse(data as string);
+    console.log('Redis - getGameSession - parsed session:', {
+      isActive: parsed.isActive,
+      isGameStarted: parsed.isGameStarted,
+      questionsCount: Array.isArray(parsed.questions) ? parsed.questions.length : 0
+    });
+    return parsed;
   }
   
   static async deleteGameSession(roomId: string) {

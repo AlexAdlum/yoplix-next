@@ -92,6 +92,17 @@ export async function startQuiz(roomId: string, slug: string): Promise<GameSessi
   await RedisStorage.setGameSession(roomId, session);
   console.log('quizEngineRedis - session created and stored in Redis');
   
+  // Проверяем, что сессия действительно сохранилась
+  const savedSession = await RedisStorage.getGameSession(roomId);
+  console.log('quizEngineRedis - verification - session saved correctly:', savedSession ? 'YES' : 'NO');
+  if (savedSession) {
+    console.log('quizEngineRedis - verification - session details:', {
+      isActive: savedSession.isActive,
+      isGameStarted: savedSession.isGameStarted,
+      questionsCount: savedSession.questions?.length || 0
+    });
+  }
+  
   return session;
 }
 
@@ -101,8 +112,30 @@ export async function getCurrentQuestion(roomId: string): Promise<Question | nul
   const session = await RedisStorage.getGameSession(roomId);
   console.log('quizEngineRedis - session found:', session ? 'YES' : 'NO');
   
-  if (!session || !session.isActive || session.currentQuestionIndex >= session.questions.length) {
-    console.log('quizEngineRedis - no active question');
+  if (!session) {
+    console.log('quizEngineRedis - no session found for roomId:', roomId);
+    return null;
+  }
+  
+  console.log('quizEngineRedis - session details:', {
+    isActive: session.isActive,
+    isGameStarted: session.isGameStarted,
+    currentQuestionIndex: session.currentQuestionIndex,
+    questionsLength: session.questions?.length || 0
+  });
+  
+  if (!session.isActive) {
+    console.log('quizEngineRedis - session is not active');
+    return null;
+  }
+  
+  if (!session.isGameStarted) {
+    console.log('quizEngineRedis - game not started yet');
+    return null;
+  }
+  
+  if (session.currentQuestionIndex >= session.questions.length) {
+    console.log('quizEngineRedis - no more questions available');
     return null;
   }
   

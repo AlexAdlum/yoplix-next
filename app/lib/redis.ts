@@ -1,10 +1,35 @@
-import { Redis } from '@upstash/redis';
+// Простое in-memory хранилище для локальной разработки
+// В продакшене будет использоваться Upstash Redis
 
-// Создаем экземпляр Redis для Upstash
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+// In-memory хранилище
+const memoryStore = new Map<string, string>();
+
+// Mock Redis интерфейс
+const redis = {
+  set: async (key: string, value: string) => {
+    memoryStore.set(key, value);
+    console.log('Memory Redis: set', key);
+    return 'OK';
+  },
+  get: async (key: string) => {
+    const value = memoryStore.get(key);
+    console.log('Memory Redis: get', key, value ? 'found' : 'not found');
+    return value || null;
+  },
+  del: async (key: string) => {
+    const existed = memoryStore.has(key);
+    memoryStore.delete(key);
+    console.log('Memory Redis: del', key);
+    return existed ? 1 : 0;
+  },
+  keys: async (pattern: string) => {
+    const keys = Array.from(memoryStore.keys()).filter((key: string) => 
+      pattern.includes('*') ? key.startsWith(pattern.replace('*', '')) : key === pattern
+    );
+    console.log('Memory Redis: keys', pattern, keys.length);
+    return keys;
+  },
+};
 
 // Утилиты для работы с Redis
 export class RedisStorage {
@@ -18,7 +43,7 @@ export class RedisStorage {
   }
   
   private static getGameSessionKey(roomId: string) {
-    return `game:${roomId}`;
+    return `gameSession:${roomId}`;
   }
   
   private static getAnswersKey(roomId: string) {

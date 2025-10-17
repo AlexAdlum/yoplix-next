@@ -5,13 +5,21 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ roomId: string }> }
 ) {
-  const { roomId } = await params;
-  console.log('GET /api/sessions/[roomId]/players - roomId:', roomId);
-  
-  const players = await listPlayers(roomId);
-  console.log('GET /api/sessions/[roomId]/players - players:', players);
-  
-  return NextResponse.json({ players }, { status: 200 });
+  try {
+    const { roomId } = await params;
+    console.log('GET /api/sessions/[roomId]/players - roomId:', roomId);
+    
+    const players = await listPlayers(roomId);
+    console.log('GET /api/sessions/[roomId]/players - players:', players);
+    
+    return NextResponse.json({ players }, { status: 200 });
+  } catch (error) {
+    console.error('GET /api/sessions/[roomId]/players - error:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch players' }, 
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(

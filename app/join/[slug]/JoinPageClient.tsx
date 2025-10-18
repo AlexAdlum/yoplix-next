@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const avatars = [
@@ -292,13 +293,13 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
                     avatar === a ? "border-pink-500 ring-2 ring-pink-200" : "border-gray-200"
                   }`}
                 >
-                  <img src={a} alt="avatar" className="w-16 h-16" />
+                  <Image src={a} alt="avatar" width={64} height={64} className="w-16 h-16" />
                 </button>
               ))}
             </div>
 
             <div className="flex items-center gap-3 mb-6">
-              <img src={avatar} alt="chosen avatar" className="w-12 h-12 rounded-full" />
+              <Image src={avatar} alt="chosen avatar" width={48} height={48} className="w-12 h-12 rounded-full" />
               <input
                 type="text"
                 placeholder="Ваш никнейм"

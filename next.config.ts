@@ -24,7 +24,7 @@ const nextConfig: NextConfig = {
 
   // Настройки для изображений
   images: {
-    domains: ['yoplix.ru'],
+    domains: ['yoplix.ru', 'api.dicebear.com', 'api.qrserver.com'],
     formats: ['image/webp', 'image/avif'],
   },
 

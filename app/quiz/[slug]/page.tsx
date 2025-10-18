@@ -1,11 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getQuizBySlug } from "@/app/data/quizzes";
+import { getQuizBySlug, quizzes } from "@/app/data/quizzes";
+
+// ISR: обновление кэша раз в 60 секунд
+export const revalidate = 60;
 
 interface QuizPageProps {
   params: Promise<{
     slug: string;
   }>;
+}
+
+// Генерируем статические параметры для всех викторин
+export async function generateStaticParams() {
+  return quizzes.map((quiz) => ({
+    slug: quiz.slug,
+  }));
 }
 
 export default async function QuizPage({ params }: QuizPageProps) {

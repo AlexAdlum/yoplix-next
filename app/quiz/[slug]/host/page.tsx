@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { getQuizBySlug } from "@/app/data/quizzes";
 
@@ -152,10 +153,13 @@ export default function HostPage({ params }: HostPageProps) {
             <p className="text-gray-700 mb-4 text-center">
               Отсканируйте QR код, чтобы присоединиться со смартфона
             </p>
-            <img
+            <Image
               alt="QR для присоединения"
               src={qrSrc}
+              width={288}
+              height={288}
               className="w-64 h-64 sm:w-72 sm:h-72 rounded-xl shadow-md"
+              priority
             />
             <p className="mt-4 text-sm text-gray-500 break-all text-center">
               Или перейдите по ссылке: <span className="font-mono">{joinUrl}</span>
@@ -180,7 +184,7 @@ export default function HostPage({ params }: HostPageProps) {
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {players.map((p) => (
                   <li key={p.id} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
-                    <img src={p.avatar} alt={p.nickname} className="w-10 h-10 rounded-full" />
+                    <Image src={p.avatar} alt={p.nickname} width={40} height={40} className="w-10 h-10 rounded-full" />
                     <span className="font-medium text-gray-800">{p.nickname}</span>
                   </li>
                 ))}

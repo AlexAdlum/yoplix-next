@@ -24,10 +24,9 @@ export default function HostPage({ params }: HostPageProps) {
   const joinUrl = useMemo(() => {
     if (typeof window === "undefined" || !roomId) return "";
     
-    // В продакшене используем yoplix.ru, в разработке - localhost
-    const base = process.env.NODE_ENV === 'production' 
-      ? 'https://yoplix.ru' 
-      : window.location.origin;
+    // Используем переменную окружения для базового URL
+    const base = process.env.NEXT_PUBLIC_BASE_URL || 
+      (process.env.NODE_ENV === 'production' ? 'https://yoplix.ru' : window.location.origin);
     
     const url = new URL(`${base}/join/${params.slug}`);
     url.searchParams.set("room", roomId);
@@ -63,7 +62,7 @@ export default function HostPage({ params }: HostPageProps) {
           console.log('Room created successfully:', data.roomId);
           console.log('Setting roomId state to:', data.roomId);
           setRoomId(data.roomId);
-          console.log('RoomId state set, joinUrl will be:', `https://www.yoplix.ru/join/${params.slug}?room=${data.roomId}`);
+          console.log('RoomId state set, joinUrl will be:', `${process.env.NEXT_PUBLIC_BASE_URL || 'https://yoplix.ru'}/join/${params.slug}?room=${data.roomId}`);
         } else {
           const error = await res.json();
           console.error('Failed to create room:', error);

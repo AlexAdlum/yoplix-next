@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://yoplix.ru'
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://yoplix.ru'
   
   // Статичные страницы
   const staticPages = [

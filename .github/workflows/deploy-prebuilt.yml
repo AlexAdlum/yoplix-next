@@ -22,18 +22,41 @@ jobs:
       - name: Install deps (clean)
         run: npm ci
 
-      - name: Build (Next.js Turbopack)
-        run: npx vercel build --prod
+      # Вытягиваем настройки проекта Vercel в CI (.vercel/project.json, env)
+      - name: Vercel Pull (link project)
+        run: >
+          npx vercel pull --yes
+          --environment=production
+          --token "$VERCEL_TOKEN"
+          --scope "$VERCEL_ORG_ID"
+          --project "$VERCEL_PROJECT_ID"
         env:
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Deploy prebuilt to production
-        run: npx vercel deploy --prebuilt --prod --yes
+      # Сборка артефакта локально в CI
+      - name: Build (Turbopack)
+        run: >
+          npx vercel build --prod
+          --token "$VERCEL_TOKEN"
+          --scope "$VERCEL_ORG_ID"
+          --project "$VERCEL_PROJECT_ID"
         env:
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      # Деплой готового артефакта
+      - name: Deploy prebuilt to production
+        run: >
+          npx vercel deploy --prebuilt --prod --yes
+          --token "$VERCEL_TOKEN"
+          --scope "$VERCEL_ORG_ID"
+          --project "$VERCEL_PROJECT_ID"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 

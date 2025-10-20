@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import Image from "next/image";
+import { getAvatarUrl } from "@/app/lib/avatar";
 import { useEffect, useMemo, useState } from "react";
 import { getQuizBySlug } from "@/app/data/quizzes";
 
@@ -186,15 +187,18 @@ export default function HostPage({ params }: HostPageProps) {
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {players.map((p) => (
                   <li key={p.id} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
-                    <Image
-                      src={p.avatar}
-                      alt={p.nickname}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={getAvatarUrl(p.nickname || 'Player')}
+                      alt={`Avatar ${p.nickname}`}
                       width={40}
                       height={40}
-                      unoptimized
+                      loading="lazy"
+                      decoding="async"
                       className="w-10 h-10 rounded-full"
                       onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = '/avatar-fallback.png';
+                        const el = e.currentTarget as HTMLImageElement;
+                        el.src = '/avatar-fallback.png';
                       }}
                     />
                     <span className="font-medium text-gray-800">{p.nickname}</span>

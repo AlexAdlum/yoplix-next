@@ -1,15 +1,16 @@
 "use client";
 import Link from "next/link";
 import Image from "next/image";
+import { getAvatarUrl } from "@/app/lib/avatar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const avatars = [
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=Ava1",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=Ava2",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=Ava3",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=Ava4",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=Ava5",
-  "https://api.dicebear.com/7.x/avataaars/svg?seed=Ava6",
+  getAvatarUrl("Ava1"),
+  getAvatarUrl("Ava2"),
+  getAvatarUrl("Ava3"),
+  getAvatarUrl("Ava4"),
+  getAvatarUrl("Ava5"),
+  getAvatarUrl("Ava6"),
 ];
 
 interface JoinPageClientProps {
@@ -293,15 +294,18 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
                     avatar === a ? "border-pink-500 ring-2 ring-pink-200" : "border-gray-200"
                   }`}
                 >
-                  <Image
-                    src={a}
-                    alt="avatar"
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={getAvatarUrl(a.split('seed=')[1] || 'Ava')}
+                    alt={`Avatar ${a}`}
                     width={64}
                     height={64}
-                    unoptimized
+                    loading="lazy"
+                    decoding="async"
                     className="w-16 h-16 rounded-full"
                     onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = '/avatar-fallback.png';
+                      const el = e.currentTarget as HTMLImageElement;
+                      el.src = '/avatar-fallback.png';
                     }}
                   />
                 </button>
@@ -309,15 +313,18 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
             </div>
 
             <div className="flex items-center gap-3 mb-6">
-              <Image
-                src={avatar}
-                alt="chosen avatar"
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={getAvatarUrl(nickname || 'Player')}
+                alt={`Avatar ${nickname || 'Player'}`}
                 width={48}
                 height={48}
-                unoptimized
+                loading="lazy"
+                decoding="async"
                 className="w-12 h-12 rounded-full"
                 onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = '/avatar-fallback.png';
+                  const el = e.currentTarget as HTMLImageElement;
+                  el.src = '/avatar-fallback.png';
                 }}
               />
               <input

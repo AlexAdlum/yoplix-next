@@ -200,7 +200,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
     const player = {
       id: playerId,
       nickname: nickname.trim(),
-      avatar,
+      avatarUrl: avatar,  // Send the exact selected avatar URL
     };
     
     console.log('handleReady - sending player data:', player);

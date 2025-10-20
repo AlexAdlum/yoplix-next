@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listPlayers, addPlayer, getRoom } from "@/app/lib/sessionStoreRedis";
 
+// Validate avatar URL for security
+function isValidAvatarUrl(url: string): boolean {
+  try {
+    const parsedUrl = new URL(url);
+    
+    // Only allow https://api.dicebear.com/7.x/.../svg?... URLs
+    if (parsedUrl.protocol !== 'https:') return false;
+    if (parsedUrl.hostname !== 'api.dicebear.com') return false;
+    if (!parsedUrl.pathname.startsWith('/7.x/')) return false;
+    if (!parsedUrl.pathname.endsWith('/svg')) return false;
+    
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ roomId: string }> }
@@ -40,17 +57,25 @@ export async function POST(
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
     
-    const { id, nickname, avatar } = (body as Record<string, unknown>);
-    console.log('POST /api/sessions/[roomId]/players - parsed data:', { id, nickname, avatar });
+    const { id, nickname, avatarUrl } = (body as Record<string, unknown>);
+    console.log('POST /api/sessions/[roomId]/players - parsed data:', { id, nickname, avatarUrl });
     
-    if (typeof id !== "string" || typeof nickname !== "string" || typeof avatar !== "string") {
+    if (typeof id !== "string" || typeof nickname !== "string" || typeof avatarUrl !== "string") {
       console.error('POST /api/sessions/[roomId]/players - validation failed:', {
         idType: typeof id,
         nicknameType: typeof nickname,
-        avatarType: typeof avatar
+        avatarUrlType: typeof avatarUrl
       });
       return NextResponse.json({ 
-        error: "id, nickname and avatar are required" 
+        error: "id, nickname and avatarUrl are required" 
+      }, { status: 400 });
+    }
+    
+    // Validate avatarUrl for security
+    if (!isValidAvatarUrl(avatarUrl)) {
+      console.error('POST /api/sessions/[roomId]/players - invalid avatarUrl:', avatarUrl);
+      return NextResponse.json({ 
+        error: "Invalid avatar URL" 
       }, { status: 400 });
     }
     
@@ -66,15 +91,20 @@ export async function POST(
     }
     
     // Добавляем игрока в комнату
-    console.log('POST /api/sessions/[roomId]/players - adding player:', { id, nickname, avatar });
-    await addPlayer(roomId, { id, nickname, avatar });
+    console.log('POST /api/sessions/[roomId]/players - adding player:', { id, nickname, avatarUrl });
+    await addPlayer(roomId, { 
+      id, 
+      nickname, 
+      avatarUrl,
+      joinedAt: Date.now()
+    });
     
     const players = await listPlayers(roomId);
     console.log('POST /api/sessions/[roomId]/players - players after add:', players);
     
     return NextResponse.json({ 
       message: "Player added successfully",
-      player: { id, nickname, avatar }
+      player: { id, nickname, avatarUrl }
     }, { status: 201 });
     
   } catch (error) {

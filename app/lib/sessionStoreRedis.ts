@@ -3,7 +3,8 @@ import { RedisStorage } from './redis';
 export type Player = {
   id: string;
   nickname: string;
-  avatar: string;
+  avatarUrl: string;  // Full URL chosen by player
+  joinedAt: number;
 };
 
 export type Room = {

@@ -12,7 +12,8 @@ interface HostPageProps {
 type Player = {
   id: string;
   nickname: string;
-  avatar: string;
+  avatarUrl: string;  // Full URL chosen by player
+  joinedAt: number;
 };
 
 export default function HostPage({ params }: HostPageProps) {
@@ -189,7 +190,7 @@ export default function HostPage({ params }: HostPageProps) {
                   <li key={p.id} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={getAvatarUrl(p.nickname || 'Player')}
+                      src={p.avatarUrl || getAvatarUrl(p.nickname || 'Player')}  // Use stored avatarUrl with fallback
                       alt={`Avatar ${p.nickname}`}
                       width={40}
                       height={40}

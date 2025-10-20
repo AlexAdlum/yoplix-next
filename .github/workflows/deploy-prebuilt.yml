@@ -28,11 +28,9 @@ jobs:
           npx vercel pull --yes
           --environment=production
           --token "$VERCEL_TOKEN"
-          --scope "$VERCEL_ORG_ID"
           --project "$VERCEL_PROJECT_ID"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       # Сборка артефакта локально в CI
@@ -40,11 +38,9 @@ jobs:
         run: >
           npx vercel build --prod
           --token "$VERCEL_TOKEN"
-          --scope "$VERCEL_ORG_ID"
           --project "$VERCEL_PROJECT_ID"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       # Деплой готового артефакта
@@ -52,11 +48,9 @@ jobs:
         run: >
           npx vercel deploy --prebuilt --prod --yes
           --token "$VERCEL_TOKEN"
-          --scope "$VERCEL_ORG_ID"
           --project "$VERCEL_PROJECT_ID"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 

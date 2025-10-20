@@ -24,7 +24,11 @@ const nextConfig: NextConfig = {
 
   // Настройки для изображений
   images: {
-    domains: ['yoplix.ru', 'api.dicebear.com', 'api.qrserver.com'],
+    domains: ['api.dicebear.com', 'api.qrserver.com', 'yoplix.ru'],
+    // Нужно для SVG-аватаров Dicebear
+    dangerouslyAllowSVG: true,
+    // Базовая CSP для SVG, чтобы не было XSS
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     formats: ['image/webp', 'image/avif'],
   },
 

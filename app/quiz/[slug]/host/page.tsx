@@ -118,7 +118,7 @@ export default function HostPage({ params }: HostPageProps) {
   }
 
   const qrSrc = joinUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(joinUrl)}&timestamp=${Date.now()}`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(joinUrl)}&timestamp=${Date.now()}`
     : "";
 
   return (
@@ -155,10 +155,13 @@ export default function HostPage({ params }: HostPageProps) {
             <Image
               alt="QR для присоединения"
               src={qrSrc}
-              width={288}
-              height={288}
-              className="w-64 h-64 sm:w-72 sm:h-72 rounded-xl shadow-md"
+              width={256}
+              height={256}
+              className="mx-auto rounded-xl shadow-md"
               priority
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/qr-fallback.png';
+              }}
             />
             <p className="mt-4 text-sm text-gray-500 break-all text-center">
               Или перейдите по ссылке: <span className="font-mono">{joinUrl}</span>
@@ -183,7 +186,17 @@ export default function HostPage({ params }: HostPageProps) {
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {players.map((p) => (
                   <li key={p.id} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
-                    <Image src={p.avatar} alt={p.nickname} width={40} height={40} className="w-10 h-10 rounded-full" />
+                    <Image
+                      src={p.avatar}
+                      alt={p.nickname}
+                      width={40}
+                      height={40}
+                      unoptimized
+                      className="w-10 h-10 rounded-full"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/avatar-fallback.png';
+                      }}
+                    />
                     <span className="font-medium text-gray-800">{p.nickname}</span>
                   </li>
                 ))}

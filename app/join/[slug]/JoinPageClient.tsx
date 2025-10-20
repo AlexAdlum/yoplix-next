@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { getAvatarUrl } from "@/app/lib/avatar";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 
 const avatars = [
   getAvatarUrl("Ava1"),
@@ -36,7 +36,9 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
   const [isCorrect, setIsCorrect] = useState<boolean>(false);
   const [playerScore, setPlayerScore] = useState<number>(0);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
-  const [answeredQuestionId, setAnsweredQuestionId] = useState<string | null>(null);
+  
+  // Ref to track previous question ID for change detection
+  const prevQuestionIdRef = useRef<string | null>(null);
 
   const channelName = useMemo(() => `yoplix-join-${slug}`, [slug]);
 
@@ -124,31 +126,34 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
     
     // Устанавливаем интервал для проверки текущего вопроса
     const interval = setInterval(async () => {
-      if (!showResult) { // Проверяем только если не показываем результат ответа
-        await loadCurrentQuestion();
-      }
-    }, 2000); // Проверяем каждые 2 секунды
+      await loadCurrentQuestion(); // Always check for question changes
+    }, 1500); // Проверяем каждые 1.5 секунды для быстрого реагирования
     
     return () => {
       console.log('Cleaning up question polling');
       clearInterval(interval);
     };
-  }, [roomId, started, showResult, loadCurrentQuestion]);
+  }, [roomId, started, loadCurrentQuestion]);
 
   // Reset result when question changes from server
   useEffect(() => {
-    if (!answeredQuestionId || !currentQuestion) return;
+    if (!currentQuestion) return;
     
     const currentQuestionId = (currentQuestion as { questionID: number }).questionID?.toString();
+    const prevQuestionId = prevQuestionIdRef.current;
     
-    // If the question ID changed, reset the result screen
-    if (currentQuestionId && currentQuestionId !== answeredQuestionId) {
-      console.log('Question changed, resetting result screen');
+    // If we have a previous question ID and it's different from current, reset result state
+    if (prevQuestionId !== null && currentQuestionId && prevQuestionId !== currentQuestionId) {
+      console.log('Question changed from', prevQuestionId, 'to', currentQuestionId, '- resetting result screen');
       setShowResult(false);
-      setAnsweredQuestionId(null);
       setIsSubmittingAnswer(false);
     }
-  }, [currentQuestion, answeredQuestionId]);
+    
+    // Update the ref with current question ID
+    if (currentQuestionId) {
+      prevQuestionIdRef.current = currentQuestionId;
+    }
+  }, [currentQuestion]);
 
   async function handleReady() {
     if (!nickname.trim()) {
@@ -255,12 +260,6 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
         setIsCorrect(data.isCorrect);
         setPlayerScore(data.totalScore);
         setShowResult(true);
-        
-        // Set the answered question ID to track when to reset the result
-        const currentQuestionId = (currentQuestion as { questionID: number }).questionID?.toString();
-        if (currentQuestionId) {
-          setAnsweredQuestionId(currentQuestionId);
-        }
         
         // Don't hide result automatically - wait for question change
         setIsSubmittingAnswer(false);
@@ -392,7 +391,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
                     </p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="grid grid-cols-1 gap-3" key={(currentQuestion as { questionID: number }).questionID}>
                     {((currentQuestion as { answers: string[] }).answers || []).map((answer: string, index: number) => (
                       <button
                         key={index}

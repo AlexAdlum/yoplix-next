@@ -386,6 +386,11 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
                     <p className="text-gray-600">
                       Правильный ответ: <strong>{(currentQuestion as { answer1: string }).answer1}</strong>
                     </p>
+                    {(currentQuestion as { comment?: string }).comment && (
+                      <p className="mt-2 text-sm text-gray-500 italic">
+                        💡 {(currentQuestion as { comment: string }).comment}
+                      </p>
+                    )}
                     <p className="text-sm text-gray-500 mt-2">
                       Ожидайте следующего вопроса от ведущего...
                     </p>

@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import Image from "next/image";
 import { getAvatarUrl } from "@/app/lib/avatar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -37,6 +36,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
   const [isCorrect, setIsCorrect] = useState<boolean>(false);
   const [playerScore, setPlayerScore] = useState<number>(0);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
+  const [answeredQuestionId, setAnsweredQuestionId] = useState<string | null>(null);
 
   const channelName = useMemo(() => `yoplix-join-${slug}`, [slug]);
 
@@ -134,6 +134,21 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
       clearInterval(interval);
     };
   }, [roomId, started, showResult, loadCurrentQuestion]);
+
+  // Reset result when question changes from server
+  useEffect(() => {
+    if (!answeredQuestionId || !currentQuestion) return;
+    
+    const currentQuestionId = (currentQuestion as { questionID: number }).questionID?.toString();
+    
+    // If the question ID changed, reset the result screen
+    if (currentQuestionId && currentQuestionId !== answeredQuestionId) {
+      console.log('Question changed, resetting result screen');
+      setShowResult(false);
+      setAnsweredQuestionId(null);
+      setIsSubmittingAnswer(false);
+    }
+  }, [currentQuestion, answeredQuestionId]);
 
   async function handleReady() {
     if (!nickname.trim()) {
@@ -241,12 +256,14 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
         setPlayerScore(data.totalScore);
         setShowResult(true);
         
-        // Через 3 секунды просто скрываем результат
-        setTimeout(() => {
-          console.log('Hiding result...');
-          setShowResult(false);
-          setIsSubmittingAnswer(false);
-        }, 3000);
+        // Set the answered question ID to track when to reset the result
+        const currentQuestionId = (currentQuestion as { questionID: number }).questionID?.toString();
+        if (currentQuestionId) {
+          setAnsweredQuestionId(currentQuestionId);
+        }
+        
+        // Don't hide result automatically - wait for question change
+        setIsSubmittingAnswer(false);
       } else {
         const errorData = await res.json().catch(() => ({ error: 'Failed to parse error response' }));
         console.error('handleAnswerSelect - error response:', errorData);
@@ -369,6 +386,9 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
                     </div>
                     <p className="text-gray-600">
                       Правильный ответ: <strong>{(currentQuestion as { answer1: string }).answer1}</strong>
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Ожидайте следующего вопроса от ведущего...
                     </p>
                   </div>
                 ) : (

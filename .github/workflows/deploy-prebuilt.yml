@@ -25,13 +25,10 @@ jobs:
       # Вытягиваем настройки проекта Vercel в CI (.vercel/project.json, env)
       - name: Vercel Pull (link project)
         run: >
-          npx vercel pull --yes
-          --environment=production
+          npx vercel pull --yes --environment=production
           --token "$VERCEL_TOKEN"
-          --project "$VERCEL_PROJECT_ID"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       # Сборка артефакта локально в CI
       - name: Build (Turbopack)

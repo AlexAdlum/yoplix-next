@@ -70,20 +70,22 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
   const checkGameStatus = useCallback(async () => {
     if (!roomId) return;
     try {
-      const res = await fetch(`/api/sessions/${roomId}/quiz?status=true`);
+      const res = await fetch(`/api/sessions/${roomId}/quiz`);
       if (res.ok) {
         const data = await res.json();
         console.log('Game status check:', data);
-        if (data.isGameStarted && !started) {
+        
+        // Если есть вопрос и игра не начата - начинаем
+        if (!data.finished && data.question && !started) {
           console.log('Game started detected, loading first question');
           setStarted(true);
-          await loadCurrentQuestion();
+          setCurrentQuestion(data.question);
         }
       }
     } catch (error) {
       console.error('Error checking game status:', error);
     }
-  }, [roomId, started, loadCurrentQuestion]);
+  }, [roomId, started]);
 
   useEffect(() => {
     const channel = new BroadcastChannel(channelName);

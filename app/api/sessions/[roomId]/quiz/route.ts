@@ -104,6 +104,11 @@ export async function POST(
       state.shuffledOptions = presentation.options;
       await saveSessionState(roomId, state);
 
+      console.log(`[Quiz API] Game started for room ${roomId}`);
+      console.log(`[Quiz API] First question:`, firstQuestion.question);
+      console.log(`[Quiz API] Options:`, presentation.options);
+      console.log(`[Quiz API] State saved with currentQuestionID:`, state.currentQuestionID);
+
       return NextResponse.json({
         question: {
           ...firstQuestion,
@@ -267,6 +272,12 @@ export async function GET(
     const { roomId } = await params;
     const state = await getSessionState(roomId);
 
+    console.log(`[Quiz API GET] Room ${roomId}, state exists:`, !!state);
+    if (state) {
+      console.log(`[Quiz API GET] currentQuestionID:`, state.currentQuestionID);
+      console.log(`[Quiz API GET] phase:`, state.phase);
+    }
+
     if (!state || state.currentQuestionID === null) {
       return NextResponse.json({
         finished: true,
@@ -276,10 +287,14 @@ export async function GET(
 
     const question = getQuestionById(state.currentQuestionID);
     if (!question) {
+      console.error(`[Quiz API GET] Question ${state.currentQuestionID} not found`);
       return NextResponse.json({ error: "Question not found" }, { status: 404 });
     }
 
     const enrichedQuestion = enrichQuestionWithMechanics(question);
+
+    console.log(`[Quiz API GET] Returning question:`, enrichedQuestion.question);
+    console.log(`[Quiz API GET] Options:`, state.shuffledOptions);
 
     return NextResponse.json({
       question: {

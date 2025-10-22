@@ -34,7 +34,6 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
   const [currentQuestion, setCurrentQuestion] = useState<unknown>(null);
   const [showResult, setShowResult] = useState<boolean>(false);
   const [isCorrect, setIsCorrect] = useState<boolean>(false);
-  const [playerScore, setPlayerScore] = useState<number>(0);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
   
   // Ref to track previous question ID for change detection
@@ -243,13 +242,19 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
     console.log('handleAnswerSelect - submitting answer:', answer);
     
     try {
-      const res = await fetch(`/api/sessions/${roomId}/answers`, {
+      const res = await fetch(`/api/sessions/${roomId}/quiz`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
           'Cache-Control': 'no-cache'
         },
-        body: JSON.stringify({ playerId, answer }),
+        body: JSON.stringify({ 
+          action: "answer",
+          playerId, 
+          option: answer,
+          nickname: nickname.trim(),
+          avatarUrl: avatar,
+        }),
       });
       
       console.log('handleAnswerSelect - response status:', res.status);
@@ -258,7 +263,6 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
         const data = await res.json();
         console.log('handleAnswerSelect - response data:', data);
         setIsCorrect(data.isCorrect);
-        setPlayerScore(data.totalScore);
         setShowResult(true);
         
         // Don't hide result automatically - wait for question change
@@ -370,13 +374,18 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
             ) : currentQuestion ? (
               <div className={`transition-all duration-500 ${showResult ? (isCorrect ? 'bg-green-50' : 'bg-red-50') : ''}`}>
                 <div className="flex justify-between items-center mb-4">
-                  <span className="text-sm text-gray-500">Счёт: {playerScore}</span>
                   <span className="text-sm text-gray-500">Вопрос {(currentQuestion as { questionID: number }).questionID}</span>
                 </div>
                 
-                <h2 className="text-xl font-bold mb-6 text-gray-800">
+                <h2 className="text-xl font-bold mb-4 text-gray-800">
                   {(currentQuestion as { question: string }).question}
                 </h2>
+                
+                {(currentQuestion as { promptText?: string }).promptText && (
+                  <p className="text-sm text-gray-600 mb-4 italic">
+                    {(currentQuestion as { promptText: string }).promptText}
+                  </p>
+                )}
                 
                 {showResult ? (
                   <div className="text-center">
@@ -417,7 +426,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
             ) : (
               <div className="text-center">
                 <h2 className="text-2xl font-bold mb-2">Игра завершена!</h2>
-                <p className="text-gray-600">Ваш финальный счёт: {playerScore}</p>
+                <p className="text-gray-600">Спасибо за участие!</p>
               </div>
             )}
           </div>

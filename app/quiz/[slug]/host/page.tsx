@@ -16,12 +16,31 @@ type Player = {
   joinedAt: number;
 };
 
+type PlayerScore = {
+  playerId: string;
+  nickname: string;
+  avatarUrl: string;
+  totalPoints: number;
+  correctCount: number;
+  totalTimeCorrectMs: number;
+};
+
+type PlayerAnswer = {
+  option: string;
+  isCorrect: boolean;
+  at: number;
+};
+
 export default function HostPage({ params }: HostPageProps) {
   const quiz = getQuizBySlug(params.slug);
   const [players, setPlayers] = useState<Player[]>([]);
   const [started, setStarted] = useState(false);
   const [roomId, setRoomId] = useState<string>("");
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [playerScores, setPlayerScores] = useState<Record<string, PlayerScore>>({});
+  const [playerAnswers, setPlayerAnswers] = useState<Record<string, PlayerAnswer>>({});
+  const [currentComment, setCurrentComment] = useState<string>("");
+  const [allAnswered, setAllAnswered] = useState(false);
   
   const joinUrl = useMemo(() => {
     if (typeof window === "undefined" || !roomId) return "";
@@ -104,12 +123,47 @@ export default function HostPage({ params }: HostPageProps) {
         // Не очищаем список игроков при ошибке сети
       }
     }
+    
+    async function fetchGameState() {
+      if (!roomId || !started) return;
+      try {
+        const res = await fetch(`/api/sessions/${roomId}/quiz`, {
+          cache: "no-store",
+          headers: {
+            'Cache-Control': 'no-cache',
+          }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.finished) {
+            setPlayerScores(data.players || {});
+            setPlayerAnswers(data.answers || {});
+            setCurrentComment(data.comment || "");
+            
+            // Проверяем, все ли игроки ответили
+            const activePlayerIds = players.map(p => p.id);
+            const answeredPlayerIds = Object.keys(data.answers || {});
+            const allPlayersAnswered = activePlayerIds.every(id => answeredPlayerIds.includes(id));
+            setAllAnswered(allPlayersAnswered);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching game state:', error);
+      }
+    }
+    
     fetchPlayers();
-    const timer = window.setInterval(fetchPlayers, 1500);
+    fetchGameState();
+    
+    const playersTimer = window.setInterval(fetchPlayers, 1500);
+    const gameStateTimer = window.setInterval(fetchGameState, 1000);
+    
     return () => {
-      window.clearInterval(timer);
+      window.clearInterval(playersTimer);
+      window.clearInterval(gameStateTimer);
     };
-  }, [params.slug, roomId, isCreatingRoom]);
+  }, [params.slug, roomId, isCreatingRoom, started, players]);
 
   if (!quiz) {
     return (
@@ -185,27 +239,54 @@ export default function HostPage({ params }: HostPageProps) {
             {players.length === 0 ? (
               <p className="text-gray-500">Ожидание игроков…</p>
             ) : (
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {players.map((p) => (
-                  <li key={p.id} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={p.avatarUrl || getAvatarUrl(p.nickname || 'Player')}  // Use stored avatarUrl with fallback
-                      alt={`Avatar ${p.nickname}`}
-                      width={40}
-                      height={40}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-10 h-10 rounded-full"
-                      onError={(e) => {
-                        const el = e.currentTarget as HTMLImageElement;
-                        el.src = '/avatar-fallback.png';
-                      }}
-                    />
-                    <span className="font-medium text-gray-800">{p.nickname}</span>
-                  </li>
-                ))}
+              <ul className="grid grid-cols-1 gap-3">
+                {players.map((p) => {
+                  const answer = playerAnswers[p.id];
+                  const score = playerScores[p.id];
+                  const bgColor = answer 
+                    ? answer.isCorrect 
+                      ? 'bg-green-50 border-green-300' 
+                      : 'bg-red-50 border-red-300'
+                    : 'bg-gray-50 border-gray-200';
+                  
+                  return (
+                    <li key={p.id} className={`flex items-center gap-3 p-3 rounded-lg border-2 ${bgColor} transition-colors`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={p.avatarUrl || getAvatarUrl(p.nickname || 'Player')}
+                        alt={`Avatar ${p.nickname}`}
+                        width={40}
+                        height={40}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-10 h-10 rounded-full"
+                        onError={(e) => {
+                          const el = e.currentTarget as HTMLImageElement;
+                          el.src = '/avatar-fallback.png';
+                        }}
+                      />
+                      <div className="flex-1">
+                        <span className="font-medium text-gray-800 block">{p.nickname}</span>
+                        {started && score && (
+                          <div className="text-xs text-gray-600 mt-1 flex gap-3">
+                            <span>💰 {score.totalPoints} баллов</span>
+                            <span>✅ {score.correctCount} правильных</span>
+                            <span>⏱️ {(score.totalTimeCorrectMs / 1000).toFixed(1)}с</span>
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
+            )}
+            
+            {allAnswered && currentComment && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-gray-700">
+                  <strong>💡 Комментарий:</strong> {currentComment}
+                </p>
+              </div>
             )}
 
             <div className="mt-6 flex justify-end gap-3">
@@ -225,8 +306,13 @@ export default function HostPage({ params }: HostPageProps) {
                         if (data.finished) {
                           console.log('Quiz finished!');
                           alert('Викторина завершена!');
+                          setStarted(false);
                         } else {
                           console.log('Next question loaded');
+                          // Сбрасываем подсветки ответов
+                          setPlayerAnswers({});
+                          setCurrentComment("");
+                          setAllAnswered(false);
                         }
                       } else {
                         const error = await res.json();

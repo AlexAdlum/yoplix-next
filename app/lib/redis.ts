@@ -296,3 +296,6 @@ export class RedisStorage {
     return rooms;
   }
 }
+
+// Экспортируем redis для использования в других модулях
+export { redis };

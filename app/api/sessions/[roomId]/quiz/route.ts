@@ -184,57 +184,90 @@ export async function POST(
 
     // ===== NEXT: Следующий вопрос =====
     if (action === "next") {
-      const state = await getSessionState(roomId);
-      if (!state) {
-        return NextResponse.json({ error: "Session not found" }, { status: 404 });
-      }
-
-      const nextIndex = state.currentQuestionIndex + 1;
+      const { withRedisLock } = await import('@/app/lib/redisLock');
+      const lockKey = `${roomId}:quiz:next`;
       
-      if (nextIndex >= state.selectedQuestions.length) {
-        // Игра завершена
-        state.phase = 'idle';
-        state.currentQuestionID = null;
-        await saveSessionState(roomId, state);
+      try {
+        const result = await withRedisLock(lockKey, 3000, async () => {
+          const state = await getSessionState(roomId);
+          if (!state) {
+            return { error: "Session not found", status: 404 };
+          }
 
-        return NextResponse.json({
-          finished: true,
-          message: "Викторина завершена",
+          const nextIndex = state.currentQuestionIndex + 1;
+          
+          console.log('[NEXT]', { roomId, nextIndex, totalQuestions: state.selectedQuestions.length });
+          
+          if (nextIndex >= state.selectedQuestions.length) {
+            // Игра завершена
+            state.phase = 'idle';
+            state.currentQuestionID = null;
+            await saveSessionState(roomId, state);
+
+            console.log('[NEXT] Quiz finished for room', roomId);
+            
+            return {
+              finished: true,
+              message: "Викторина завершена",
+              status: 200,
+            };
+          }
+
+          // Переходим к следующему вопросу
+          const nextQuestionId = state.selectedQuestions[nextIndex];
+          const nextQuestion = getQuestionById(nextQuestionId);
+          
+          if (!nextQuestion) {
+            console.error('[NEXT] Question not found:', nextQuestionId);
+            return { error: "Next question not found", status: 404 };
+          }
+
+          const enrichedQuestion = enrichQuestionWithMechanics(nextQuestion);
+          const handler = getMechanics(enrichedQuestion.mechanicsType);
+          const presentation = handler.presentQuestion(enrichedQuestion);
+
+          console.log('[NEXT] Moving to question:', { 
+            questionID: nextQuestionId, 
+            nextIndex, 
+            question: enrichedQuestion.question 
+          });
+
+          // Обновляем состояние
+          state.currentQuestionID = nextQuestionId;
+          state.currentQuestionIndex = nextIndex;
+          state.phase = 'question';
+          state.questionStartedAt = Date.now();
+          state.answers = {}; // Сбрасываем ответы
+          state.firstCorrectPlayerId = null;
+          state.shuffledOptions = presentation.options;
+
+          await saveSessionState(roomId, state);
+
+          return {
+            question: {
+              ...enrichedQuestion,
+              answers: presentation.options,
+            },
+            promptText: presentation.promptText,
+            currentQuestion: nextIndex + 1,
+            totalQuestions: state.totalQuestions,
+            status: 200,
+          };
         });
+
+        if ('error' in result) {
+          return NextResponse.json({ error: result.error }, { status: result.status });
+        }
+        
+        return NextResponse.json(result, { status: result.status });
+        
+      } catch (error) {
+        if (error instanceof Error && error.message === 'LOCKED') {
+          return NextResponse.json({ error: 'BUSY' }, { status: 429 });
+        }
+        console.error('[NEXT] Unexpected error:', error);
+        return NextResponse.json({ error: 'INTERNAL' }, { status: 500 });
       }
-
-      // Переходим к следующему вопросу
-      const nextQuestionId = state.selectedQuestions[nextIndex];
-      const nextQuestion = getQuestionById(nextQuestionId);
-      
-      if (!nextQuestion) {
-        return NextResponse.json({ error: "Next question not found" }, { status: 404 });
-      }
-
-      const enrichedQuestion = enrichQuestionWithMechanics(nextQuestion);
-      const handler = getMechanics(enrichedQuestion.mechanicsType);
-      const presentation = handler.presentQuestion(enrichedQuestion);
-
-      // Обновляем состояние
-      state.currentQuestionID = nextQuestionId;
-      state.currentQuestionIndex = nextIndex;
-      state.phase = 'question';
-      state.questionStartedAt = Date.now();
-      state.answers = {}; // Сбрасываем ответы
-      state.firstCorrectPlayerId = null;
-      state.shuffledOptions = presentation.options;
-
-      await saveSessionState(roomId, state);
-
-      return NextResponse.json({
-        question: {
-          ...enrichedQuestion,
-          answers: presentation.options,
-        },
-        promptText: presentation.promptText,
-        currentQuestion: nextIndex + 1,
-        totalQuestions: state.totalQuestions,
-      });
     }
 
     // ===== END: Завершить игру =====

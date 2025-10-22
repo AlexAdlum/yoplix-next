@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import Image from "next/image";
 import { getAvatarUrl } from "@/app/lib/avatar";
 import { useEffect, useMemo, useState } from "react";
 import { getQuizBySlug } from "@/app/data/quizzes";
@@ -41,21 +40,19 @@ export default function HostPage({ params }: HostPageProps) {
   const [playerAnswers, setPlayerAnswers] = useState<Record<string, PlayerAnswer>>({});
   const [currentComment, setCurrentComment] = useState<string>("");
   const [allAnswered, setAllAnswered] = useState(false);
+  const [isNextQuestionLoading, setIsNextQuestionLoading] = useState(false);
   
   const joinUrl = useMemo(() => {
-    if (typeof window === "undefined" || !roomId) return "";
+    if (!roomId) return "";
     
-    // Используем переменную окружения для базового URL
-    const base = process.env.NEXT_PUBLIC_BASE_URL || 
-      (process.env.NODE_ENV === 'production' ? 'https://yoplix.ru' : window.location.origin);
+    // Используем переменную окружения для домена
+    const domain = process.env.NEXT_PUBLIC_SITE_DOMAIN || 
+      process.env.NEXT_PUBLIC_BASE_URL?.replace(/^https?:\/\//, '') || 
+      'yoplix.ru';
     
-    const url = new URL(`${base}/join/${params.slug}`);
-    url.searchParams.set("room", roomId);
-    const finalUrl = url.toString();
-    console.log('joinUrl generated:', finalUrl);
-    console.log('Environment:', process.env.NODE_ENV);
-    console.log('Base URL:', base);
-    return finalUrl;
+    const url = `https://${domain}/join/${params.slug}?room=${roomId}`;
+    console.log('joinUrl generated:', url);
+    return url;
   }, [params.slug, roomId]);
 
   useEffect(() => {
@@ -174,7 +171,7 @@ export default function HostPage({ params }: HostPageProps) {
   }
 
   const qrSrc = joinUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(joinUrl)}&timestamp=${Date.now()}`
+    ? `/api/qr?data=${encodeURIComponent(joinUrl)}&size=256`
     : "";
 
   return (
@@ -208,19 +205,20 @@ export default function HostPage({ params }: HostPageProps) {
             <p className="text-gray-700 mb-4 text-center">
               Отсканируйте QR код, чтобы присоединиться со смартфона
             </p>
-            <Image
-              alt="QR для присоединения"
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={qrSrc}
+              alt="QR для присоединения"
               width={256}
               height={256}
               className="mx-auto rounded-xl shadow-md"
-              priority
               onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = '/qr-fallback.png';
+                const el = e.currentTarget as HTMLImageElement;
+                el.src = '/qr-fallback.png';
               }}
             />
             <p className="mt-4 text-sm text-gray-500 break-all text-center">
-              Или перейдите по ссылке: <span className="font-mono">{joinUrl}</span>
+              Или перейдите по ссылке: <code className="break-all">{joinUrl}</code>
             </p>
           </div>
 
@@ -293,7 +291,9 @@ export default function HostPage({ params }: HostPageProps) {
               {started && (
                 <button
                   onClick={async () => {
-                    if (!roomId) return;
+                    if (!roomId || isNextQuestionLoading) return;
+                    
+                    setIsNextQuestionLoading(true);
                     try {
                       console.log('Moving to next question...');
                       const res = await fetch(`/api/sessions/${roomId}/quiz`, {
@@ -301,6 +301,7 @@ export default function HostPage({ params }: HostPageProps) {
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ action: "next" }),
                       });
+                      
                       if (res.ok) {
                         const data = await res.json();
                         if (data.finished) {
@@ -314,19 +315,34 @@ export default function HostPage({ params }: HostPageProps) {
                           setCurrentComment("");
                           setAllAnswered(false);
                         }
+                      } else if (res.status === 429) {
+                        // Блокировка уже захвачена, повторим через 500мс
+                        console.warn('Lock busy, retrying in 500ms...');
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        setIsNextQuestionLoading(false);
+                        // Повторяем клик
+                        const retryBtn = document.activeElement as HTMLButtonElement;
+                        if (retryBtn) retryBtn.click();
+                        return;
                       } else {
-                        const error = await res.json();
+                        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
                         console.error('Next question error:', error);
                         alert(`Ошибка перехода к следующему вопросу: ${error.error || 'Неизвестная ошибка'}`);
                       }
                     } catch (error) {
                       console.error('Network error:', error);
                       alert('Ошибка сети при переходе к следующему вопросу');
+                    } finally {
+                      // Задержка для предотвращения двойных кликов
+                      setTimeout(() => setIsNextQuestionLoading(false), 800);
                     }
                   }}
-                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold rounded-xl transition-transform shadow-lg hover:scale-105"
+                  disabled={isNextQuestionLoading}
+                  className={`px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold rounded-xl transition-transform shadow-lg ${
+                    isNextQuestionLoading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
+                  }`}
                 >
-                  Следующий вопрос
+                  {isNextQuestionLoading ? 'Загрузка...' : 'Следующий вопрос'}
                 </button>
               )}
               

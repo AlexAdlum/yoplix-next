@@ -10,7 +10,8 @@
     "lint": "eslint",
     "export": "next export",
     "analyze": "ANALYZE=true next build",
-    "deploy": "npm run build && npm run start"
+    "deploy": "npm run build && npm run start",
+    "import:quizzes": "node scripts/import-quizzes.mjs"
   },
   "dependencies": {
     "@upstash/redis": "^1.35.6",

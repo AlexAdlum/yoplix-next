@@ -193,8 +193,6 @@ export default function HostPage({ params }: HostPageProps) {
           
           // Always update session, even if players list is empty
           setSession(prev => {
-            if (!prev) return null;
-            
             const newPlayers = playersList.reduce((acc: Record<string, PlayerScore>, p: Record<string, unknown>) => {
               const playerId = (p.id || p.playerId) as string;
               acc[playerId] = {
@@ -208,7 +206,17 @@ export default function HostPage({ params }: HostPageProps) {
               return acc;
             }, {});
             
-            console.log('[HOST] Updating session.players:', Object.keys(newPlayers).length);
+            console.log('[HOST] Updating session.players:', Object.keys(newPlayers).length, 'prev exists:', !!prev);
+            
+            // If no session yet, create minimal session state
+            if (!prev) {
+              return {
+                phase: 'idle' as const,
+                currentQuestionID: null,
+                players: newPlayers,
+                answers: {},
+              };
+            }
             
             return {
               ...prev,

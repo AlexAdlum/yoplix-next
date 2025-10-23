@@ -199,7 +199,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
     setPlayerId(playerId);
     
     const player = {
-      id: playerId,
+      playerId: playerId,  // Changed from 'id' to 'playerId'
       nickname: nickname.trim(),
       avatarUrl: avatar,  // Send the exact selected avatar URL
     };

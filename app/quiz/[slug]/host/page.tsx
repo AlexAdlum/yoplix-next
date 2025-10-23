@@ -259,6 +259,13 @@ export default function HostPage({ params }: HostPageProps) {
         <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-6">
           {quiz.title}
         </h1>
+        
+        {/* Диагностическая информация (только в dev) */}
+        {process.env.NODE_ENV === 'development' && (
+          <pre className="text-xs opacity-60 bg-gray-100 p-2 rounded mb-4">
+            room: {roomId} | players: {Object.keys(session?.players || {}).length} | phase: {session?.phase || 'none'}
+          </pre>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* QR код - показываем только до старта */}

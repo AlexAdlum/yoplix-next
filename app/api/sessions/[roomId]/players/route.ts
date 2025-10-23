@@ -1,5 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listPlayers, addPlayer, getRoom } from "@/app/lib/sessionStoreRedis";
+import { redis } from "@/app/lib/redis";
+
+type PlayerScore = {
+  playerId: string;
+  nickname: string;
+  avatarUrl: string;
+  totalPoints: number;
+  correctCount: number;
+  totalTimeCorrectMs: number;
+};
+
+type SessionState = {
+  roomId: string;
+  slug: string;
+  phase: 'idle' | 'question' | 'reveal';
+  currentQuestionID: number | null;
+  players: Record<string, PlayerScore>;
+  answers: Record<string, { option: string; isCorrect: boolean; at: number }>;
+  [key: string]: unknown;
+};
 
 // Validate avatar URL for security
 function isValidAvatarUrl(url: string): boolean {
@@ -24,18 +43,24 @@ export async function GET(
 ) {
   try {
     const { roomId } = await params;
-    console.log('GET /api/sessions/[roomId]/players - roomId:', roomId);
+    const stateKey = `session:${roomId}:state`;
     
-    const players = await listPlayers(roomId);
-    console.log('GET /api/sessions/[roomId]/players - players:', players);
+    const state = await redis.get(stateKey) as string | null;
     
-    return NextResponse.json({ players }, { status: 200 });
+    if (!state) {
+      console.log(`[GET /players] Session ${roomId} not found`);
+      return NextResponse.json({ players: [] }, { status: 200 });
+    }
+    
+    const sessionState = JSON.parse(state) as SessionState;
+    const playersArray = Object.values(sessionState.players || {});
+    
+    console.log(`[GET /players] Room ${roomId}, ${playersArray.length} players`);
+    
+    return NextResponse.json({ players: playersArray }, { status: 200 });
   } catch (error) {
-    console.error('GET /api/sessions/[roomId]/players - error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch players' }, 
-      { status: 500 }
-    );
+    console.error('[GET /players] Error:', error);
+    return NextResponse.json({ error: 'Failed to fetch players' }, { status: 500 });
   }
 }
 
@@ -45,71 +70,59 @@ export async function POST(
 ) {
   try {
     const { roomId } = await params;
-    console.log('POST /api/sessions/[roomId]/players - roomId:', roomId);
+    const body = await req.json() as Record<string, unknown>;
     
-    let body: unknown = {};
+    const { playerId, nickname, avatarUrl } = body;
     
-    try {
-      body = await req.json();
-      console.log('POST /api/sessions/[roomId]/players - body:', body);
-    } catch (error) {
-      console.error('POST /api/sessions/[roomId]/players - JSON parse error:', error);
-      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-    }
+    console.log('[JOIN]', { roomId, playerId, nickname });
     
-    const { id, nickname, avatarUrl } = (body as Record<string, unknown>);
-    console.log('POST /api/sessions/[roomId]/players - parsed data:', { id, nickname, avatarUrl });
-    
-    if (typeof id !== "string" || typeof nickname !== "string" || typeof avatarUrl !== "string") {
-      console.error('POST /api/sessions/[roomId]/players - validation failed:', {
-        idType: typeof id,
-        nicknameType: typeof nickname,
-        avatarUrlType: typeof avatarUrl
-      });
-      return NextResponse.json({ 
-        error: "id, nickname and avatarUrl are required" 
-      }, { status: 400 });
+    if (typeof playerId !== "string" || typeof nickname !== "string" || typeof avatarUrl !== "string") {
+      return NextResponse.json({ error: "BAD_REQUEST: playerId, nickname and avatarUrl are required" }, { status: 400 });
     }
     
     // Validate avatarUrl for security
     if (!isValidAvatarUrl(avatarUrl)) {
-      console.error('POST /api/sessions/[roomId]/players - invalid avatarUrl:', avatarUrl);
-      return NextResponse.json({ 
-        error: "Invalid avatar URL" 
-      }, { status: 400 });
+      return NextResponse.json({ error: "Invalid avatar URL" }, { status: 400 });
     }
     
-    // Проверяем, что комната существует
-    const room = await getRoom(roomId);
-    console.log('POST /api/sessions/[roomId]/players - room:', room);
+    const stateKey = `session:${roomId}:state`;
     
-    if (!room) {
-      console.error('POST /api/sessions/[roomId]/players - room not found for roomId:', roomId);
-      return NextResponse.json({ 
-        error: "Room not found" 
-      }, { status: 404 });
+    // Читаем состояние
+    const stateStr = await redis.get(stateKey) as string | null;
+    
+    if (!stateStr) {
+      console.error(`[JOIN] SESSION_NOT_FOUND for room ${roomId}`);
+      return NextResponse.json({ error: "SESSION_NOT_FOUND" }, { status: 404 });
     }
     
-    // Добавляем игрока в комнату
-    console.log('POST /api/sessions/[roomId]/players - adding player:', { id, nickname, avatarUrl });
-    await addPlayer(roomId, { 
-      id, 
-      nickname, 
-      avatarUrl,
-      joinedAt: Date.now()
-    });
+    const state = JSON.parse(stateStr) as SessionState;
     
-    const players = await listPlayers(roomId);
-    console.log('POST /api/sessions/[roomId]/players - players after add:', players);
+    // Если игрока нет — создаём baseline
+    if (!state.players[playerId]) {
+      state.players[playerId] = {
+        playerId,
+        nickname,
+        avatarUrl,
+        totalPoints: 0,
+        correctCount: 0,
+        totalTimeCorrectMs: 0,
+      };
+      console.log(`[JOIN] New player ${playerId} (${nickname}) joined room ${roomId}`);
+    } else {
+      // обновим ник/аватар, если пересоздаётся
+      state.players[playerId].nickname = nickname;
+      state.players[playerId].avatarUrl = avatarUrl;
+      console.log(`[JOIN] Player ${playerId} (${nickname}) rejoined room ${roomId}`);
+    }
     
-    return NextResponse.json({ 
-      message: "Player added successfully",
-      player: { id, nickname, avatarUrl }
-    }, { status: 201 });
+    // Сохраняем обновлённое состояние
+    await redis.set(stateKey, JSON.stringify(state));
     
+    console.log(`[JOIN] Total players in room ${roomId}:`, Object.keys(state.players).length);
+    
+    return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
-    console.error('POST /api/sessions/[roomId]/players - unexpected error:', error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error('[JOIN] Error:', error);
+    return NextResponse.json({ error: 'INTERNAL' }, { status: 500 });
   }
 }
-

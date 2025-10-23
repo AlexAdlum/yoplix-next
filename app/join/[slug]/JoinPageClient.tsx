@@ -255,20 +255,22 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
     setPlayerId(playerId);
     
     const player = {
-      playerId: playerId,  // Changed from 'id' to 'playerId'
+      slug: slug,
       nickname: nickname.trim(),
-      avatarUrl: avatar,  // Send the exact selected avatar URL
+      avatarUrl: avatar,
+      avatarId: null,
     };
     
+    console.log('[JOIN] slug=%s roomId=%s nickname=%s', slug, roomId, nickname.trim());
     console.log('handleReady - sending player data:', player);
     
     try {
-      const response = await fetch(`/api/sessions/${roomId}/players`, {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(roomId)}/players`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          'Cache-Control': 'no-cache',
         },
+        cache: 'no-store',
         body: JSON.stringify(player),
       });
       
@@ -276,13 +278,18 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
       
       if (response.ok) {
         const data = await response.json();
-        console.log('handleReady - response data:', data);
+        console.log('[JOIN] OK', data);
         setJoined(true);
         console.log('handleReady - player joined successfully');
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
-        console.error('handleReady - error response:', errorData);
-        alert(`Ошибка присоединения: ${errorData.error || 'Неизвестная ошибка'}`);
+        console.error('[JOIN] BAD', response.status, errorData);
+        
+        if (errorData.error === 'SESSION_NOT_FOUND') {
+          alert('Комната не найдена. Обновите QR.');
+        } else {
+          alert(`Ошибка подключения: ${errorData.error || 'Неизвестная ошибка'}`);
+        }
       }
     } catch (error) {
       console.error('handleReady - network error:', error);

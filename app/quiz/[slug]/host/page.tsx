@@ -167,7 +167,12 @@ export default function HostPage({ params }: HostPageProps) {
 
   // Poll players list in lobby (before game starts)
   useEffect(() => {
-    if (!roomId || session?.phase === 'question' || session?.phase === 'idle') return;
+    if (!roomId) return;
+    
+    console.log('[HOST] slug=%s roomId=%s phase=%s', params.slug, roomId, session?.phase || 'lobby');
+    
+    // Poll only in lobby phase
+    if (session?.phase === 'question' || session?.phase === 'idle') return;
     
     let stopped = false;
     console.log('[HOST] Starting lobby polling for players');
@@ -176,32 +181,42 @@ export default function HostPage({ params }: HostPageProps) {
       if (stopped) return;
       
       try {
-        const res = await fetch(`/api/sessions/${roomId}/players`, {
+        const res = await fetch(`/api/sessions/${encodeURIComponent(roomId)}/players`, {
           cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache' }
+          headers: { 'Cache-Control': 'no-store' }
         });
         
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data?.players) && data.players.length > 0) {
-            console.log(`[HOST] Lobby: ${data.players.length} players`);
+          const playersList = Array.isArray(data?.players) ? data.players : [];
+          console.log('[HOST] players', playersList.length);
+          
+          if (playersList.length > 0) {
             // Update session with players
             setSession(prev => prev ? {
               ...prev,
-              players: data.players.reduce((acc: Record<string, PlayerScore>, p: PlayerScore) => {
-                acc[p.playerId] = p;
+              players: playersList.reduce((acc: Record<string, PlayerScore>, p: Record<string, unknown>) => {
+                const playerId = (p.id || p.playerId) as string;
+                acc[playerId] = {
+                  playerId,
+                  nickname: p.nickname as string,
+                  avatarUrl: p.avatarUrl as string,
+                  totalPoints: (p.score as number) || 0,
+                  correctCount: (p.correct as number) || 0,
+                  totalTimeCorrectMs: (p.totalCorrectTimeMs as number) || 0,
+                };
                 return acc;
               }, {})
             } : null);
           }
         } else {
-          console.warn('[HOST] PLAYERS_BAD_STATUS', res.status);
+          console.warn('[HOST] players status', res.status);
         }
       } catch (e) {
-        console.warn('[HOST] PLAYERS_FETCH_ERR', e);
+        console.warn('[HOST] players fetch err', e);
       } finally {
         if (!stopped) {
-          setTimeout(fetchPlayers, 1200);
+          setTimeout(fetchPlayers, 1000);
         }
       }
     }
@@ -212,7 +227,7 @@ export default function HostPage({ params }: HostPageProps) {
       stopped = true;
       console.log('[HOST] Stopping lobby polling');
     };
-  }, [roomId, session?.phase]);
+  }, [roomId, session?.phase, params.slug]);
 
   // Poll game state
   useEffect(() => {

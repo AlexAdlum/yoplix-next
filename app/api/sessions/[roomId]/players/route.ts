@@ -1,39 +1,91 @@
 import { NextRequest, NextResponse } from "next/server";
 import { redis } from "@/app/lib/redis";
+import { randomUUID } from "crypto";
+import { keyPlayers, keyState, keyEvents } from "@/app/lib/sessionKeys";
 
-type PlayerScore = {
-  playerId: string;
-  nickname: string;
-  avatarUrl: string;
-  totalPoints: number;
-  correctCount: number;
-  totalTimeCorrectMs: number;
-};
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-type SessionState = {
-  roomId: string;
-  slug: string;
-  phase: 'idle' | 'question' | 'reveal';
-  currentQuestionID: number | null;
-  players: Record<string, PlayerScore>;
-  answers: Record<string, { option: string; isCorrect: boolean; at: number }>;
-  [key: string]: unknown;
-};
+async function arrAppendSafe(roomId: string, value: unknown) {
+  const k = keyPlayers(roomId);
+  // Всегда используем ручной подход для надёжности
+  const existing = await redis.get(k);
+  let arr: unknown[] = [];
+  
+  if (typeof existing === 'string') {
+    try {
+      const parsed = JSON.parse(existing);
+      arr = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      arr = [];
+    }
+  } else if (Array.isArray(existing)) {
+    arr = existing;
+  }
+  
+  arr.push(value);
+  await redis.set(k, JSON.stringify(arr));
+  return arr.length;
+}
 
-// Validate avatar URL for security
-function isValidAvatarUrl(url: string): boolean {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ roomId: string }> }
+) {
+  const t0 = Date.now();
   try {
-    const parsedUrl = new URL(url);
+    const { roomId } = await params;
+    const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+    const { slug, nickname, avatarUrl, avatarId } = body ?? {};
     
-    // Only allow https://api.dicebear.com/7.x/.../svg?... URLs
-    if (parsedUrl.protocol !== 'https:') return false;
-    if (parsedUrl.hostname !== 'api.dicebear.com') return false;
-    if (!parsedUrl.pathname.startsWith('/7.x/')) return false;
-    if (!parsedUrl.pathname.endsWith('/svg')) return false;
+    console.log('[POST players] roomId=%s slug=%s nick=%s', roomId, slug, nickname);
+
+    if (!roomId || !slug) {
+      return NextResponse.json({ error: 'BAD_REQUEST' }, { status: 400 });
+    }
+    if (!nickname || !avatarUrl) {
+      return NextResponse.json({ error: 'BAD_PLAYER' }, { status: 400 });
+    }
+
+    const stateStr = await redis.get(keyState(roomId)) as string | null;
+    if (!stateStr) {
+      console.warn('[POST players] SESSION_NOT_FOUND roomId=%s', roomId);
+      return NextResponse.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 });
+    }
+
+    const player = {
+      id: randomUUID(),
+      nickname: String(nickname).slice(0, 32),
+      avatarUrl: String(avatarUrl),
+      avatarId: avatarId ?? null,
+      score: 0,
+      correct: 0,
+      totalCorrectTimeMs: 0,
+      joinedAt: Date.now(),
+    };
+
+    await arrAppendSafe(roomId, player);
     
-    return true;
-  } catch {
-    return false;
+    // Publish event (ignore errors if publish not available)
+    try {
+      const redisWithPublish = redis as { publish?: (channel: string, message: string) => Promise<unknown> };
+      if (typeof redisWithPublish.publish === 'function') {
+        await redisWithPublish.publish(keyEvents(roomId), JSON.stringify({ type: 'player:joined', payload: { player } }));
+      }
+    } catch (e) {
+      console.warn('[POST players] publish failed (non-critical)', e);
+    }
+
+    console.log('[POST players] OK in %dms roomId=%s players+1', Date.now() - t0, roomId);
+    
+    return NextResponse.json({ ok: true, player }, {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  } catch (e) {
+    console.error('[POST players] ERROR', e);
+    return NextResponse.json({ error: 'INTERNAL' }, { status: 500 });
   }
 }
 
@@ -43,89 +95,31 @@ export async function GET(
 ) {
   try {
     const { roomId } = await params;
-    const stateKey = `session:${roomId}:state`;
     
-    const state = await redis.get(stateKey) as string | null;
-    
-    if (!state) {
-      console.log(`[GET /players] Session ${roomId} not found`);
-      return NextResponse.json({ players: [] }, { status: 200 });
+    if (!roomId) {
+      return NextResponse.json({ error: 'BAD_REQUEST' }, { status: 400 });
     }
     
-    const sessionState = JSON.parse(state) as SessionState;
-    const playersArray = Object.values(sessionState.players || {});
+    const playersStr = await redis.get(keyPlayers(roomId)) as string | null;
+    let players: unknown[] = [];
     
-    console.log(`[GET /players] Room ${roomId}, ${playersArray.length} players`);
-    
-    return NextResponse.json({ players: playersArray }, { status: 200 });
-  } catch (error) {
-    console.error('[GET /players] Error:', error);
-    return NextResponse.json({ error: 'Failed to fetch players' }, { status: 500 });
-  }
-}
-
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ roomId: string }> }
-) {
-  try {
-    const { roomId } = await params;
-    const body = await req.json() as Record<string, unknown>;
-    
-    const { playerId, nickname, avatarUrl } = body;
-    
-    console.log('[JOIN]', { roomId, playerId, nickname });
-    
-    if (typeof playerId !== "string" || typeof nickname !== "string" || typeof avatarUrl !== "string") {
-      return NextResponse.json({ error: "BAD_REQUEST: playerId, nickname and avatarUrl are required" }, { status: 400 });
+    if (playersStr) {
+      try {
+        const parsed = JSON.parse(playersStr);
+        players = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        players = [];
+      }
     }
     
-    // Validate avatarUrl for security
-    if (!isValidAvatarUrl(avatarUrl)) {
-      return NextResponse.json({ error: "Invalid avatar URL" }, { status: 400 });
-    }
+    console.log('[GET players] roomId=%s count=%d', roomId, players.length);
     
-    const stateKey = `session:${roomId}:state`;
-    
-    // Читаем состояние
-    const stateStr = await redis.get(stateKey) as string | null;
-    
-    if (!stateStr) {
-      console.error(`[JOIN] SESSION_NOT_FOUND for room ${roomId}`);
-      return NextResponse.json({ 
-        error: "SESSION_NOT_FOUND", 
-        message: "Комната ещё не создана ведущим" 
-      }, { status: 404 });
-    }
-    
-    const state = JSON.parse(stateStr) as SessionState;
-    
-    // Если игрока нет — создаём baseline
-    if (!state.players[playerId]) {
-      state.players[playerId] = {
-        playerId,
-        nickname,
-        avatarUrl,
-        totalPoints: 0,
-        correctCount: 0,
-        totalTimeCorrectMs: 0,
-      };
-      console.log(`[JOIN] New player ${playerId} (${nickname}) joined room ${roomId}`);
-    } else {
-      // обновим ник/аватар, если пересоздаётся
-      state.players[playerId].nickname = nickname;
-      state.players[playerId].avatarUrl = avatarUrl;
-      console.log(`[JOIN] Player ${playerId} (${nickname}) rejoined room ${roomId}`);
-    }
-    
-    // Сохраняем обновлённое состояние
-    await redis.set(stateKey, JSON.stringify(state));
-    
-    console.log(`[JOIN] Total players in room ${roomId}:`, Object.keys(state.players).length);
-    
-    return NextResponse.json({ ok: true }, { status: 200 });
-  } catch (error) {
-    console.error('[JOIN] Error:', error);
+    return NextResponse.json({ ok: true, players }, {
+      status: 200,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  } catch (e) {
+    console.error('[GET players] ERROR', e);
     return NextResponse.json({ error: 'INTERNAL' }, { status: 500 });
   }
 }

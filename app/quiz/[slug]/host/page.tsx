@@ -109,10 +109,14 @@ export default function HostPage({ params }: HostPageProps) {
   }
 
   useEffect(() => {
+    let active = true;
+    
     async function ensureRoom() {
       if (roomId || isCreatingRoom) return;
       
       setIsCreatingRoom(true);
+      console.log('[HOST] Creating session for slug:', params.slug);
+      
       try {
         const res = await fetch(`/api/sessions`, {
           method: "POST",
@@ -121,16 +125,27 @@ export default function HostPage({ params }: HostPageProps) {
         });
         
         if (res.ok) {
-          const data = (await res.json()) as { roomId: string };
-          setRoomId(data.roomId);
+          const data = (await res.json()) as { ok: boolean; roomId: string };
+          if (active && data?.ok && data?.roomId) {
+            console.log('[HOST] Session created:', data.roomId);
+            setRoomId(data.roomId);
+          }
+        } else {
+          console.error('[HOST] Failed to create session:', res.status);
         }
       } catch (error) {
-        console.error('Error creating room:', error);
+        console.error('[HOST] Error creating room:', error);
       } finally {
-        setIsCreatingRoom(false);
+        if (active) {
+          setIsCreatingRoom(false);
+        }
       }
     }
     ensureRoom();
+    
+    return () => {
+      active = false;
+    };
 
     async function fetchGameState() {
       if (!roomId) return;
@@ -176,6 +191,18 @@ export default function HostPage({ params }: HostPageProps) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-gray-600">Викторина не найдена</p>
+      </div>
+    );
+  }
+
+  // Показываем индикатор загрузки пока создаётся комната
+  if (!roomId && isCreatingRoom) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Создаём комнату…</p>
+        </div>
       </div>
     );
   }

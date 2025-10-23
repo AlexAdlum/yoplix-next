@@ -35,6 +35,8 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
   const [showResult, setShowResult] = useState<boolean>(false);
   const [isCorrect, setIsCorrect] = useState<boolean>(false);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
+  const [sessionExists, setSessionExists] = useState<boolean | null>(null);
+  const [checkingSession, setCheckingSession] = useState(false);
   
   // Ref to track previous question ID for change detection
   const prevQuestionIdRef = useRef<string | null>(null);
@@ -45,14 +47,68 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const room = new URLSearchParams(window.location.search).get("room");
-    console.log('Join page - extracted room from URL:', room);
+    console.log('[PLAYER] Extracted room from URL:', room);
     if (room) {
       setRoomId(room);
-      console.log('Join page - roomId set to:', room);
     } else {
-      console.error('Join page - no room parameter in URL');
+      console.error('[PLAYER] No room parameter in URL');
     }
   }, []);
+
+  // Check if session exists (poll until found or timeout)
+  useEffect(() => {
+    if (!roomId) return;
+    
+    let cancelled = false;
+    setCheckingSession(true);
+    console.log('[PLAYER] Checking if session exists:', roomId);
+
+    let tries = 0;
+    const tick = async () => {
+      tries++;
+      try {
+        const res = await fetch(`/api/sessions/${roomId}`, { 
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        const data = await res.json();
+        
+        if (!cancelled) {
+          if (data?.exists) {
+            console.log('[PLAYER] Session found!', roomId);
+            setSessionExists(true);
+            setCheckingSession(false);
+            return;
+          }
+          
+          if (tries < 15) {
+            console.log(`[PLAYER] Session not found yet, retry ${tries}/15`);
+            setTimeout(tick, 1000);
+          } else {
+            console.error('[PLAYER] Session not found after 15 tries');
+            setSessionExists(false);
+            setCheckingSession(false);
+          }
+        }
+      } catch (error) {
+        console.error('[PLAYER] Error checking session:', error);
+        if (!cancelled) {
+          if (tries < 15) {
+            setTimeout(tick, 1000);
+          } else {
+            setSessionExists(false);
+            setCheckingSession(false);
+          }
+        }
+      }
+    };
+    
+    tick();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId]);
 
   const loadCurrentQuestion = useCallback(async () => {
     if (!roomId) return;
@@ -295,6 +351,13 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
             </Link>
             <span className="text-gray-600">Присоединение к игре</span>
           </div>
+          
+          {/* Диагностическая информация (только в dev) */}
+          {process.env.NODE_ENV === 'development' && roomId && (
+            <pre className="text-xs opacity-60 bg-gray-100 p-2 rounded mt-2">
+              room: {roomId} | sessionExists: {String(sessionExists)} | joined: {String(joined)}
+            </pre>
+          )}
         </div>
       </header>
 
@@ -360,11 +423,23 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
 
             <button
               onClick={handleReady}
-              disabled={!nickname.trim()}
-              className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold rounded-xl disabled:opacity-50"
+              disabled={!sessionExists || checkingSession || !nickname.trim()}
+              className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold rounded-xl disabled:opacity-50 transition-opacity"
             >
-              Готов
+              {checkingSession ? 'Проверяем комнату...' : 'Готов'}
             </button>
+            
+            {checkingSession && (
+              <p className="text-sm text-gray-500 mt-2">Ждём комнату ведущего…</p>
+            )}
+            
+            {sessionExists === false && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-600">
+                  ⚠️ Комната не найдена. Попросите ведущего обновить QR/ссылку и попробуйте снова.
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-xl p-8">

@@ -92,7 +92,10 @@ export async function POST(
     
     if (!stateStr) {
       console.error(`[JOIN] SESSION_NOT_FOUND for room ${roomId}`);
-      return NextResponse.json({ error: "SESSION_NOT_FOUND" }, { status: 404 });
+      return NextResponse.json({ 
+        error: "SESSION_NOT_FOUND", 
+        message: "Комната ещё не создана ведущим" 
+      }, { status: 404 });
     }
     
     const state = JSON.parse(stateStr) as SessionState;

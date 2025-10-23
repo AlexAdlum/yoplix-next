@@ -337,6 +337,7 @@ export async function GET(
       promptText: enrichedQuestion.promptText,
       comment: enrichedQuestion.comment,
       currentQuestion: state.currentQuestionIndex + 1,
+      currentQuestionID: state.currentQuestionID, // ← Добавляем ID текущего вопроса
       totalQuestions: state.totalQuestions,
       phase: state.phase,
       players: state.players,

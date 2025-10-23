@@ -257,16 +257,19 @@ export default function HostPage({ params }: HostPageProps) {
         if (res.ok) {
           const data = await res.json();
           if (!data.finished) {
+            console.log('[HOST fetchGameState] Players update:', Object.keys(data.players || {}).length, 'players');
+            console.log('[HOST fetchGameState] Answers update:', Object.keys(data.answers || {}).length, 'answers');
+            
             setSession({
               phase: data.phase || 'idle',
-              currentQuestionID: data.currentQuestion?.id || null,
+              currentQuestionID: data.currentQuestionID || null,
               players: data.players || {},
               answers: data.answers || {},
-              currentQuestion: data.currentQuestion ? {
-                id: data.currentQuestion,
-                question: data.question?.question || '',
+              currentQuestion: data.question ? {
+                id: data.currentQuestionID,
+                question: data.question.question || '',
                 promptText: data.promptText,
-                options: data.question?.answers || [],
+                options: data.question.answers || [],
                 comment: data.comment,
               } : undefined,
             });
@@ -527,7 +530,8 @@ export default function HostPage({ params }: HostPageProps) {
 
             {/* Кнопки управления */}
             <div className="mt-6 flex justify-end gap-3">
-              {session?.currentQuestionID && session.phase === 'question' && (
+              {/* Кнопка "Следующий вопрос" - показываем ВСЕГДА когда есть текущий вопрос */}
+              {session?.currentQuestionID && (
                 <button
                   onClick={handleNext}
                   disabled={isNextQuestionLoading}
@@ -539,6 +543,7 @@ export default function HostPage({ params }: HostPageProps) {
                 </button>
               )}
               
+              {/* Кнопка "Начать" - только в лобби */}
               {!session?.currentQuestionID && session?.phase !== 'question' && playersArr.length > 0 && (
                 <button
                   onClick={handleStart}

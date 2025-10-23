@@ -165,6 +165,55 @@ export default function HostPage({ params }: HostPageProps) {
     };
   }, [params.slug, roomId]);
 
+  // Poll players list in lobby (before game starts)
+  useEffect(() => {
+    if (!roomId || session?.phase === 'question' || session?.phase === 'idle') return;
+    
+    let stopped = false;
+    console.log('[HOST] Starting lobby polling for players');
+    
+    async function fetchPlayers() {
+      if (stopped) return;
+      
+      try {
+        const res = await fetch(`/api/sessions/${roomId}/players`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.players) && data.players.length > 0) {
+            console.log(`[HOST] Lobby: ${data.players.length} players`);
+            // Update session with players
+            setSession(prev => prev ? {
+              ...prev,
+              players: data.players.reduce((acc: Record<string, PlayerScore>, p: PlayerScore) => {
+                acc[p.playerId] = p;
+                return acc;
+              }, {})
+            } : null);
+          }
+        } else {
+          console.warn('[HOST] PLAYERS_BAD_STATUS', res.status);
+        }
+      } catch (e) {
+        console.warn('[HOST] PLAYERS_FETCH_ERR', e);
+      } finally {
+        if (!stopped) {
+          setTimeout(fetchPlayers, 1200);
+        }
+      }
+    }
+    
+    fetchPlayers();
+    
+    return () => {
+      stopped = true;
+      console.log('[HOST] Stopping lobby polling');
+    };
+  }, [roomId, session?.phase]);
+
   // Poll game state
   useEffect(() => {
     if (!roomId) return;
@@ -342,9 +391,9 @@ export default function HostPage({ params }: HostPageProps) {
         </h1>
         
         {/* Диагностическая информация (только в dev) */}
-        {process.env.NODE_ENV === 'development' && (
+        {process.env.NODE_ENV === 'development' && roomId && (
           <pre className="text-xs opacity-60 bg-gray-100 p-2 rounded mb-4">
-            room: {roomId} | players: {Object.keys(session?.players || {}).length} | phase: {session?.phase || 'none'}
+            [HOST] roomId: {roomId} | players: {Object.keys(session?.players || {}).length} | phase: {session?.phase || 'lobby'}
           </pre>
         )}
 

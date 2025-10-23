@@ -446,7 +446,6 @@ export default function HostPage({ params }: HostPageProps) {
       if (res.ok) {
         const data = await res.json();
         if (data.finished) {
-          alert('Викторина завершена!');
           setSession(prev => prev ? { ...prev, phase: 'idle', currentQuestionID: null } : null);
         }
       } else if (res.status === 429) {

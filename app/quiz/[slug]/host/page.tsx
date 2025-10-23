@@ -345,12 +345,20 @@ export default function HostPage({ params }: HostPageProps) {
             });
           } else {
             // Викторина завершена - обновляем финальные данные игроков
-            setSession(prev => prev ? { 
-              ...prev, 
-              phase: 'idle', 
-              currentQuestionID: null,
-              players: data.players || prev.players
-            } : null);
+            setSession(prev => {
+              if (!prev) return null;
+              
+              // Проверяем, изменились ли данные игроков
+              const newPlayers = data.players || {};
+              const playersChanged = JSON.stringify(newPlayers) !== JSON.stringify(prev.players);
+              
+              return { 
+                ...prev, 
+                phase: 'idle', 
+                currentQuestionID: null,
+                players: playersChanged ? newPlayers : prev.players
+              };
+            });
           }
         }
       } catch (error) {

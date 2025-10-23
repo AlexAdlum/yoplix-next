@@ -344,21 +344,14 @@ export default function HostPage({ params }: HostPageProps) {
               };
             });
           } else {
-            // Викторина завершена - обновляем финальные данные игроков
-            setSession(prev => {
-              if (!prev) return null;
-              
-              // Проверяем, изменились ли данные игроков
-              const newPlayers = data.players || {};
-              const playersChanged = JSON.stringify(newPlayers) !== JSON.stringify(prev.players);
-              
-              return { 
-                ...prev, 
-                phase: 'idle', 
-                currentQuestionID: null,
-                players: playersChanged ? newPlayers : prev.players
-              };
-            });
+            // Викторина завершена
+            setSession(prev => prev ? { 
+              ...prev, 
+              phase: 'idle', 
+              currentQuestionID: null,
+              // Обновляем игроков только если есть данные из API
+              ...(data.players && { players: data.players })
+            } : null);
           }
         }
       } catch (error) {

@@ -172,7 +172,7 @@ export default function HostPage({ params }: HostPageProps) {
     console.log('[HOST] slug=%s roomId=%s phase=%s', params.slug, roomId, session?.phase || 'lobby');
     
     // Stop polling during game (question, reveal, or idle after game)
-    if (session?.phase === 'question' || session?.phase === 'reveal' || session?.currentQuestionID) return;
+    if (session?.phase === 'question' || session?.phase === 'reveal' || session?.phase === 'idle' || session?.currentQuestionID) return;
     
     let stopped = false;
     console.log('[HOST] Starting lobby polling for players');

@@ -8,13 +8,6 @@ interface HostPageProps {
   params: { slug: string };
 }
 
-type Player = {
-  id: string;
-  nickname: string;
-  avatarUrl: string;  // Full URL chosen by player
-  joinedAt: number;
-};
-
 type PlayerScore = {
   playerId: string;
   nickname: string;
@@ -30,60 +23,106 @@ type PlayerAnswer = {
   at: number;
 };
 
+type SessionState = {
+  phase: 'idle' | 'question' | 'reveal';
+  currentQuestionID: number | null;
+  players: Record<string, PlayerScore>;
+  answers: Record<string, PlayerAnswer>;
+  currentQuestion?: {
+    id: number;
+    question: string;
+    promptText?: string | null;
+    options: string[];
+    comment?: string | null;
+  };
+};
+
+// Утилиты форматирования
+function fmtSecs(n: number) {
+  if (!isFinite(n) || n < 0) return '0.0s';
+  return `${(n / 1000).toFixed(1)}s`;
+}
+
+function avgCorrectTime(totalMs: number, count: number) {
+  return count > 0 ? totalMs / count : NaN;
+}
+
 export default function HostPage({ params }: HostPageProps) {
   const quiz = getQuizBySlug(params.slug);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [started, setStarted] = useState(false);
   const [roomId, setRoomId] = useState<string>("");
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
-  const [playerScores, setPlayerScores] = useState<Record<string, PlayerScore>>({});
-  const [playerAnswers, setPlayerAnswers] = useState<Record<string, PlayerAnswer>>({});
-  const [currentComment, setCurrentComment] = useState<string>("");
-  const [allAnswered, setAllAnswered] = useState(false);
+  const [session, setSession] = useState<SessionState | null>(null);
   const [isNextQuestionLoading, setIsNextQuestionLoading] = useState(false);
   
   const joinUrl = useMemo(() => {
     if (!roomId) return "";
     
-    // Используем переменную окружения для домена
     const domain = process.env.NEXT_PUBLIC_SITE_DOMAIN || 
       process.env.NEXT_PUBLIC_BASE_URL?.replace(/^https?:\/\//, '') || 
       'yoplix.ru';
     
-    const url = `https://${domain}/join/${params.slug}?room=${roomId}`;
-    console.log('joinUrl generated:', url);
-    return url;
+    return `https://${domain}/join/${params.slug}?room=${roomId}`;
   }, [params.slug, roomId]);
 
+  // Скрыть QR после старта
+  const showQR = !session?.currentQuestionID && session?.phase !== 'question';
+
+  // Сортировка игроков по убыванию счёта
+  const playersArr = useMemo(() => {
+    if (!session?.players) return [];
+    const arr = Object.values(session.players);
+    arr.sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      if (b.correctCount !== a.correctCount) return b.correctCount - a.correctCount;
+      const aAvg = avgCorrectTime(a.totalTimeCorrectMs, a.correctCount);
+      const bAvg = avgCorrectTime(b.totalTimeCorrectMs, b.correctCount);
+      if (isNaN(aAvg) && isNaN(bAvg)) return 0;
+      if (isNaN(aAvg)) return 1;
+      if (isNaN(bAvg)) return -1;
+      return aAvg - bAvg;
+    });
+    return arr;
+  }, [session?.players]);
+
+  // Проверка, все ли ответили
+  const allAnswered = useMemo(() => {
+    if (!session) return false;
+    const totalPlayers = Object.keys(session.players ?? {}).length;
+    const totalAnswers = Object.keys(session.answers ?? {}).length;
+    return totalPlayers > 0 && totalAnswers === totalPlayers;
+  }, [session]);
+
+  // Топы для финиша
+  function topByPoints(players: typeof playersArr) {
+    return [...players].sort((a, b) => b.totalPoints - a.totalPoints).slice(0, 3);
+  }
+
+  function topByAvgTime(players: typeof playersArr) {
+    const withAvg = players
+      .filter(p => p.correctCount > 0)
+      .map(p => ({ ...p, avg: p.totalTimeCorrectMs / p.correctCount }));
+    return withAvg.sort((a, b) => a.avg - b.avg).slice(0, 3);
+  }
+
+  function topByCorrect(players: typeof playersArr) {
+    return [...players].sort((a, b) => b.correctCount - a.correctCount).slice(0, 3);
+  }
+
   useEffect(() => {
-    // Ensure room exists (create once per host screen open)
     async function ensureRoom() {
-      console.log('ensureRoom called - roomId:', roomId, 'isCreatingRoom:', isCreatingRoom);
-      if (roomId || isCreatingRoom) {
-        console.log('ensureRoom - skipping, room already exists or is being created');
-        return;
-      }
+      if (roomId || isCreatingRoom) return;
       
       setIsCreatingRoom(true);
-      console.log('Attempting to create room for slug:', params.slug);
-      
       try {
         const res = await fetch(`/api/sessions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ slug: params.slug }),
         });
-        console.log('Room creation response status:', res.status);
         
         if (res.ok) {
           const data = (await res.json()) as { roomId: string };
-          console.log('Room created successfully:', data.roomId);
-          console.log('Setting roomId state to:', data.roomId);
           setRoomId(data.roomId);
-          console.log('RoomId state set, joinUrl will be:', `${process.env.NEXT_PUBLIC_BASE_URL || 'https://yoplix.ru'}/join/${params.slug}?room=${data.roomId}`);
-        } else {
-          const error = await res.json();
-          console.error('Failed to create room:', error);
         }
       } catch (error) {
         console.error('Error creating room:', error);
@@ -93,56 +132,33 @@ export default function HostPage({ params }: HostPageProps) {
     }
     ensureRoom();
 
-    async function fetchPlayers() {
-      if (!roomId) return;
-      try {
-        console.log('Fetching players for roomId:', roomId);
-        const res = await fetch(`/api/sessions/${roomId}/players`, {
-          cache: "no-store",
-          headers: {
-            'Cache-Control': 'no-cache',
-          }
-        });
-        
-        console.log('Fetch players response status:', res.status);
-        
-        if (res.ok) {
-          const data = (await res.json()) as { players: Player[] };
-          console.log('Players fetched:', data.players.length);
-          setPlayers(data.players);
-        } else {
-          console.error('Failed to fetch players, status:', res.status);
-          const errorData = await res.json().catch(() => ({ error: 'Unknown error' }));
-          console.error('Fetch players error:', errorData);
-        }
-      } catch (error) {
-        console.error('Error fetching players:', error);
-        // Не очищаем список игроков при ошибке сети
-      }
-    }
-    
     async function fetchGameState() {
-      if (!roomId || !started) return;
+      if (!roomId) return;
       try {
         const res = await fetch(`/api/sessions/${roomId}/quiz`, {
           cache: "no-store",
-          headers: {
-            'Cache-Control': 'no-cache',
-          }
+          headers: { 'Cache-Control': 'no-cache' }
         });
         
         if (res.ok) {
           const data = await res.json();
           if (!data.finished) {
-            setPlayerScores(data.players || {});
-            setPlayerAnswers(data.answers || {});
-            setCurrentComment(data.comment || "");
-            
-            // Проверяем, все ли игроки ответили
-            const activePlayerIds = players.map(p => p.id);
-            const answeredPlayerIds = Object.keys(data.answers || {});
-            const allPlayersAnswered = activePlayerIds.every(id => answeredPlayerIds.includes(id));
-            setAllAnswered(allPlayersAnswered);
+            setSession({
+              phase: data.phase || 'idle',
+              currentQuestionID: data.currentQuestion?.id || null,
+              players: data.players || {},
+              answers: data.answers || {},
+              currentQuestion: data.currentQuestion ? {
+                id: data.currentQuestion,
+                question: data.question?.question || '',
+                promptText: data.promptText,
+                options: data.question?.answers || [],
+                comment: data.comment,
+              } : undefined,
+            });
+          } else {
+            // Викторина завершена
+            setSession(prev => prev ? { ...prev, phase: 'idle', currentQuestionID: null } : null);
           }
         }
       } catch (error) {
@@ -150,17 +166,11 @@ export default function HostPage({ params }: HostPageProps) {
       }
     }
     
-    fetchPlayers();
     fetchGameState();
+    const timer = window.setInterval(fetchGameState, 1000);
     
-    const playersTimer = window.setInterval(fetchPlayers, 1500);
-    const gameStateTimer = window.setInterval(fetchGameState, 1000);
-    
-    return () => {
-      window.clearInterval(playersTimer);
-      window.clearInterval(gameStateTimer);
-    };
-  }, [params.slug, roomId, isCreatingRoom, started, players]);
+    return () => window.clearInterval(timer);
+  }, [params.slug, roomId, isCreatingRoom]);
 
   if (!quiz) {
     return (
@@ -170,9 +180,59 @@ export default function HostPage({ params }: HostPageProps) {
     );
   }
 
-  const qrSrc = joinUrl
-    ? `/api/qr?data=${encodeURIComponent(joinUrl)}&size=256`
-    : "";
+  const qrSrc = joinUrl ? `/api/qr?data=${encodeURIComponent(joinUrl)}&size=256` : "";
+
+  const handleStart = async () => {
+    if (!roomId) return;
+    try {
+      const res = await fetch(`/api/sessions/${roomId}/quiz`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start", slug: params.slug }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        alert(`Ошибка: ${error.error || 'Не удалось начать игру'}`);
+      }
+    } catch (error) {
+      console.error('Error starting quiz:', error);
+      alert('Ошибка сети при запуске викторины');
+    }
+  };
+
+  const handleNext = async () => {
+    if (!roomId || isNextQuestionLoading) return;
+    
+    setIsNextQuestionLoading(true);
+    try {
+      const res = await fetch(`/api/sessions/${roomId}/quiz`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "next" }),
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.finished) {
+          alert('Викторина завершена!');
+          setSession(prev => prev ? { ...prev, phase: 'idle', currentQuestionID: null } : null);
+        }
+      } else if (res.status === 429) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setIsNextQuestionLoading(false);
+        handleNext();
+        return;
+      } else {
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+        alert(`Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+      }
+    } catch (error) {
+      console.error('Error moving to next question:', error);
+      alert('Ошибка сети при переходе к следующему вопросу');
+    } finally {
+      setTimeout(() => setIsNextQuestionLoading(false), 800);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-pink-50">
@@ -201,54 +261,57 @@ export default function HostPage({ params }: HostPageProps) {
         </h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center">
-            <p className="text-gray-700 mb-4 text-center">
-              Отсканируйте QR код, чтобы присоединиться со смартфона
-            </p>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={qrSrc}
-              alt="QR для присоединения"
-              width={256}
-              height={256}
-              className="mx-auto rounded-xl shadow-md"
-              onError={(e) => {
-                const el = e.currentTarget as HTMLImageElement;
-                el.src = '/qr-fallback.png';
-              }}
-            />
-            <p className="mt-4 text-sm text-gray-500 break-all text-center">
-              Или перейдите по ссылке: <code className="break-all">{joinUrl}</code>
-            </p>
-          </div>
+          {/* QR код - показываем только до старта */}
+          {showQR && (
+            <div className="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center">
+              <p className="text-gray-700 mb-4 text-center">
+                Отсканируйте QR код, чтобы присоединиться со смартфона
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrSrc}
+                alt="QR для присоединения"
+                width={256}
+                height={256}
+                className="mx-auto rounded-xl shadow-md"
+                onError={(e) => {
+                  const el = e.currentTarget as HTMLImageElement;
+                  el.src = '/qr-fallback.png';
+                }}
+              />
+              <p className="mt-4 text-sm text-gray-500 break-all text-center">
+                Или перейдите по ссылке: <code className="break-all">{joinUrl}</code>
+              </p>
+            </div>
+          )}
 
+          {/* Список игроков */}
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-gray-800">Игроки</h2>
-              <span className="text-sm text-gray-500">{players.length} присоединилось</span>
+              <span className="text-lg font-semibold text-gray-600">
+                {playersArr.length}
+              </span>
             </div>
 
-            {started && (
-              <div className="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-700 px-4 py-3">
-                Игра запущена! Игроки получили сигнал старта.
-              </div>
-            )}
-
-            {players.length === 0 ? (
+            {playersArr.length === 0 ? (
               <p className="text-gray-500">Ожидание игроков…</p>
             ) : (
-              <ul className="grid grid-cols-1 gap-3">
-                {players.map((p) => {
-                  const answer = playerAnswers[p.id];
-                  const score = playerScores[p.id];
-                  const bgColor = answer 
-                    ? answer.isCorrect 
-                      ? 'bg-green-50 border-green-300' 
-                      : 'bg-red-50 border-red-300'
-                    : 'bg-gray-50 border-gray-200';
-                  
+              <ul className="space-y-3">
+                {playersArr.map((p) => {
+                  const ans = session?.answers[p.playerId];
+                  const highlight = ans
+                    ? ans.isCorrect
+                      ? 'ring-2 ring-green-500'
+                      : 'ring-2 ring-red-500'
+                    : '';
+                  const avgMs = avgCorrectTime(p.totalTimeCorrectMs, p.correctCount);
+
                   return (
-                    <li key={p.id} className={`flex items-center gap-3 p-3 rounded-lg border-2 ${bgColor} transition-colors`}>
+                    <li
+                      key={p.playerId}
+                      className={`flex items-center gap-3 p-3 rounded-xl bg-gray-50 ${highlight} transition-all`}
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={p.avatarUrl || getAvatarUrl(p.nickname || 'Player')}
@@ -264,79 +327,33 @@ export default function HostPage({ params }: HostPageProps) {
                         }}
                       />
                       <div className="flex-1">
-                        <span className="font-medium text-gray-800 block">{p.nickname}</span>
-                        {started && score && (
-                          <div className="text-xs text-gray-600 mt-1 flex gap-3">
-                            <span>💰 {score.totalPoints} баллов</span>
-                            <span>✅ {score.correctCount} правильных</span>
-                            <span>⏱️ {(score.totalTimeCorrectMs / 1000).toFixed(1)}с</span>
-                          </div>
-                        )}
+                        <div className="font-medium text-gray-800">{p.nickname}</div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          Очки: <span className="font-semibold">{p.totalPoints}</span> ·{' '}
+                          Правильных: <span className="font-semibold">{p.correctCount}</span> ·{' '}
+                          Ср.время: <span className="font-semibold">
+                            {isNaN(avgMs) ? '—' : fmtSecs(avgMs)}
+                          </span>
+                        </div>
                       </div>
                     </li>
                   );
                 })}
               </ul>
             )}
-            
-            {allAnswered && currentComment && (
-              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-gray-700">
-                  <strong>💡 Комментарий:</strong> {currentComment}
-                </p>
+
+            {/* Комментарий после ответов всех игроков */}
+            {allAnswered && session?.currentQuestion?.comment && (
+              <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-gray-700">
+                💡 {session.currentQuestion.comment}
               </div>
             )}
 
+            {/* Кнопки управления */}
             <div className="mt-6 flex justify-end gap-3">
-              {started && (
+              {session?.currentQuestionID && session.phase === 'question' && (
                 <button
-                  onClick={async () => {
-                    if (!roomId || isNextQuestionLoading) return;
-                    
-                    setIsNextQuestionLoading(true);
-                    try {
-                      console.log('Moving to next question...');
-                      const res = await fetch(`/api/sessions/${roomId}/quiz`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ action: "next" }),
-                      });
-                      
-                      if (res.ok) {
-                        const data = await res.json();
-                        if (data.finished) {
-                          console.log('Quiz finished!');
-                          alert('Викторина завершена!');
-                          setStarted(false);
-                        } else {
-                          console.log('Next question loaded');
-                          // Сбрасываем подсветки ответов
-                          setPlayerAnswers({});
-                          setCurrentComment("");
-                          setAllAnswered(false);
-                        }
-                      } else if (res.status === 429) {
-                        // Блокировка уже захвачена, повторим через 500мс
-                        console.warn('Lock busy, retrying in 500ms...');
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        setIsNextQuestionLoading(false);
-                        // Повторяем клик
-                        const retryBtn = document.activeElement as HTMLButtonElement;
-                        if (retryBtn) retryBtn.click();
-                        return;
-                      } else {
-                        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
-                        console.error('Next question error:', error);
-                        alert(`Ошибка перехода к следующему вопросу: ${error.error || 'Неизвестная ошибка'}`);
-                      }
-                    } catch (error) {
-                      console.error('Network error:', error);
-                      alert('Ошибка сети при переходе к следующему вопросу');
-                    } finally {
-                      // Задержка для предотвращения двойных кликов
-                      setTimeout(() => setIsNextQuestionLoading(false), 800);
-                    }
-                  }}
+                  onClick={handleNext}
                   disabled={isNextQuestionLoading}
                   className={`px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold rounded-xl transition-transform shadow-lg ${
                     isNextQuestionLoading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
@@ -346,49 +363,87 @@ export default function HostPage({ params }: HostPageProps) {
                 </button>
               )}
               
-              <button
-                onClick={async () => {
-                  if (!roomId) {
-                    console.error('No roomId available');
-                    return;
-                  }
-                  console.log('Starting quiz for roomId:', roomId, 'slug:', params.slug);
-                  try {
-                    const res = await fetch(`/api/sessions/${roomId}/quiz`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ action: "start", slug: params.slug }),
-                    });
-                    console.log('Quiz start response status:', res.status);
-                    if (res.ok) {
-                      setStarted(true);
-                      console.log('Quiz started successfully');
-                      // Игроки будут проверять статус игры через polling
-                    } else {
-                      const error = await res.json();
-                      console.error('Quiz start error:', error);
-                      alert(`Ошибка запуска викторины: ${error.error || 'Неизвестная ошибка'}`);
-                    }
-                  } catch (error) {
-                    console.error('Network error:', error);
-                    alert('Ошибка сети при запуске викторины');
-                  }
-                }}
-                className={`px-6 py-3 text-white font-bold rounded-xl transition-transform shadow-lg ${
-                  players.length === 0
-                    ? "bg-gray-300 cursor-not-allowed"
-                    : "bg-gradient-to-r from-yellow-400 to-pink-500 hover:scale-105"
-                }`}
-                disabled={players.length === 0 || started}
-              >
-                {started ? "Идёт игра" : "Начать викторину"}
-              </button>
+              {!session?.currentQuestionID && session?.phase !== 'question' && session?.phase !== 'idle' && (
+                <button
+                  onClick={handleStart}
+                  className="px-8 py-4 bg-gradient-to-r from-yellow-400 via-pink-500 to-blue-500 text-white font-extrabold text-lg rounded-xl shadow-2xl hover:scale-105 transform transition-all"
+                >
+                  Начать викторину
+                </button>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Итоги после завершения */}
+        {session?.phase === 'idle' && playersArr.length > 0 && (
+          <section className="mt-8 bg-white rounded-2xl shadow-xl p-8 space-y-4">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">🏆 Итоги викторины</h2>
+            
+            {/* 1. Победители */}
+            <div className="text-sm">
+              <span className="font-semibold text-gray-800">Победители — </span>
+              {topByPoints(playersArr).map((p, i) => (
+                <span key={p.playerId} className="inline-flex items-center gap-1 mr-4">
+                  <span className="font-medium">
+                    {i === 0 ? '🥇 Золото:' : i === 1 ? '🥈 Серебро:' : '🥉 Бронза:'}
+                  </span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={p.avatarUrl}
+                    alt={p.nickname}
+                    width={20}
+                    height={20}
+                    className="rounded-full inline-block"
+                  />
+                  <span className="font-semibold">{p.nickname}</span>
+                  <span className="text-gray-500">({p.totalPoints} очков)</span>
+                </span>
+              ))}
+            </div>
+
+            {/* 2. Самый быстрый */}
+            <div className="text-sm">
+              <span className="font-semibold text-gray-800">⚡ Самый быстрый — </span>
+              {topByAvgTime(playersArr).map((p) => (
+                <span key={p.playerId} className="inline-flex items-center gap-1 mr-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={p.avatarUrl}
+                    alt={p.nickname}
+                    width={20}
+                    height={20}
+                    className="rounded-full inline-block"
+                  />
+                  <span className="font-semibold">{p.nickname}</span>
+                  <span className="text-gray-500">
+                    ({fmtSecs(p.totalTimeCorrectMs / p.correctCount)})
+                  </span>
+                </span>
+              ))}
+            </div>
+
+            {/* 3. Самый результативный */}
+            <div className="text-sm">
+              <span className="font-semibold text-gray-800">🎯 Самый результативный — </span>
+              {topByCorrect(playersArr).map((p) => (
+                <span key={p.playerId} className="inline-flex items-center gap-1 mr-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={p.avatarUrl}
+                    alt={p.nickname}
+                    width={20}
+                    height={20}
+                    className="rounded-full inline-block"
+                  />
+                  <span className="font-semibold">{p.nickname}</span>
+                  <span className="text-gray-500">({p.correctCount} правильных)</span>
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );
 }
-
-

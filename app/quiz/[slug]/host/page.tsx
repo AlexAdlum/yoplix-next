@@ -51,6 +51,7 @@ export default function HostPage({ params }: HostPageProps) {
   const quiz = getQuizBySlug(params.slug);
   const [roomId, setRoomId] = useState<string>("");
   const [isCreatingRoom, setIsCreatingRoom] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [session, setSession] = useState<SessionState | null>(null);
   const [isNextQuestionLoading, setIsNextQuestionLoading] = useState(false);
   
@@ -108,47 +109,67 @@ export default function HostPage({ params }: HostPageProps) {
     return [...players].sort((a, b) => b.correctCount - a.correctCount).slice(0, 3);
   }
 
+  // Create room on mount
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     
-    async function ensureRoom() {
-      if (roomId || isCreatingRoom) return;
+    async function createRoom() {
+      if (roomId) return; // already have roomId
       
       setIsCreatingRoom(true);
+      setCreateError(null);
       console.log('[HOST] Creating session for slug:', params.slug);
       
       try {
-        const res = await fetch(`/api/sessions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        const res = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug: params.slug }),
+          signal: controller.signal,
+          cache: 'no-store',
         });
         
-        if (res.ok) {
-          const data = (await res.json()) as { ok: boolean; roomId: string };
-          if (active && data?.ok && data?.roomId) {
-            console.log('[HOST] Session created:', data.roomId);
-            setRoomId(data.roomId);
-          }
-        } else {
-          console.error('[HOST] Failed to create session:', res.status);
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          console.error('[HOST] SESSION_CREATE_BAD_STATUS', res.status, text);
+          throw new Error(`HTTP ${res.status}`);
         }
-      } catch (error) {
-        console.error('[HOST] Error creating room:', error);
+        
+        const data = await res.json() as { ok: boolean; roomId: string };
+        console.log('[HOST] Session created:', data);
+        
+        if (active && data?.ok && data?.roomId) {
+          setRoomId(data.roomId);
+        } else if (active) {
+          throw new Error('NO_ROOM_ID in response');
+        }
+      } catch (e: unknown) {
+        const error = e as Error;
+        console.error('[HOST] SESSION_CREATE_ERROR', error);
+        if (active && error.name !== 'AbortError') {
+          setCreateError(error?.message ?? 'Create failed');
+        }
       } finally {
         if (active) {
           setIsCreatingRoom(false);
         }
       }
     }
-    ensureRoom();
+    
+    createRoom();
     
     return () => {
       active = false;
+      controller.abort();
     };
+  }, [params.slug, roomId]);
+
+  // Poll game state
+  useEffect(() => {
+    if (!roomId) return;
 
     async function fetchGameState() {
-      if (!roomId) return;
       try {
         const res = await fetch(`/api/sessions/${roomId}/quiz`, {
           cache: "no-store",
@@ -177,7 +198,7 @@ export default function HostPage({ params }: HostPageProps) {
           }
         }
       } catch (error) {
-        console.error('Error fetching game state:', error);
+        console.error('[HOST] Error fetching game state:', error);
       }
     }
     
@@ -185,7 +206,7 @@ export default function HostPage({ params }: HostPageProps) {
     const timer = window.setInterval(fetchGameState, 1000);
     
     return () => window.clearInterval(timer);
-  }, [params.slug, roomId, isCreatingRoom]);
+  }, [roomId]);
 
   if (!quiz) {
     return (
@@ -207,22 +228,55 @@ export default function HostPage({ params }: HostPageProps) {
     );
   }
 
+  // Показываем ошибку если не удалось создать комнату
+  if (createError && !roomId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="text-center max-w-md">
+          <p className="text-red-500 text-lg font-semibold mb-2">Не удалось создать комнату</p>
+          <pre className="text-xs opacity-70 bg-gray-100 p-3 rounded mb-4 text-left overflow-auto">
+            {createError}
+          </pre>
+          <button
+            className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800 transition-colors"
+            onClick={() => {
+              window.location.reload();
+            }}
+          >
+            Повторить
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const qrSrc = joinUrl ? `/api/qr?data=${encodeURIComponent(joinUrl)}&size=256` : "";
 
   const handleStart = async () => {
-    if (!roomId) return;
+    if (!roomId) {
+      console.warn('[HOST] Start pressed but no roomId yet');
+      return;
+    }
+    
+    console.log('[HOST] Starting quiz for room:', roomId);
+    
     try {
       const res = await fetch(`/api/sessions/${roomId}/quiz`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "start", slug: params.slug }),
       });
+      
       if (!res.ok) {
-        const error = await res.json();
+        const text = await res.text().catch(() => '');
+        console.error('[HOST] START_BAD_STATUS', res.status, text);
+        const error = text ? JSON.parse(text) : {};
         alert(`Ошибка: ${error.error || 'Не удалось начать игру'}`);
+      } else {
+        console.log('[HOST] Quiz started successfully');
       }
     } catch (error) {
-      console.error('Error starting quiz:', error);
+      console.error('[HOST] START_ERROR', error);
       alert('Ошибка сети при запуске викторины');
     }
   };

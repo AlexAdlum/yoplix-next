@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as { slug: string; roomId?: string };
     const { slug, roomId: maybeRoomId } = body;
     
-    console.log('[SESSION_CREATE]', { slug, maybeRoomId });
+    console.log('[API] POST /sessions', { slug, maybeRoomId });
     
     if (!slug) {
       return NextResponse.json({ error: 'BAD_REQUEST: slug is required' }, { status: 400 });
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     const existingState = await redis.get(key) as string | null;
     
     if (existingState) {
-      console.log('[SESSION_CREATE] Session already exists:', roomId);
+      console.log('[API] Session already exists:', roomId);
       return NextResponse.json({ ok: true, roomId }, { status: 200 });
     }
 
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     
     await redis.set(key, JSON.stringify(state));
     
-    console.log('[SESSION_CREATE] New session created:', { roomId, slug });
+    console.log('[API] New session created:', { roomId, slug });
     
     return NextResponse.json({ ok: true, roomId }, { status: 201 });
   } catch (e) {

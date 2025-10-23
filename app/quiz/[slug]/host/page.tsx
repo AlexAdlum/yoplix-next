@@ -171,8 +171,8 @@ export default function HostPage({ params }: HostPageProps) {
     
     console.log('[HOST] slug=%s roomId=%s phase=%s', params.slug, roomId, session?.phase || 'lobby');
     
-    // Poll only in lobby phase
-    if (session?.phase === 'question' || session?.phase === 'idle') return;
+    // Poll only in lobby phase (not during game)
+    if (session?.phase === 'question') return;
     
     let stopped = false;
     console.log('[HOST] Starting lobby polling for players');
@@ -208,14 +208,14 @@ export default function HostPage({ params }: HostPageProps) {
             
             console.log('[HOST] Updating session.players:', Object.keys(newPlayers).length, 'prev exists:', !!prev);
             
-            // If no session yet, create minimal session state
+            // If no session yet, create minimal session state WITHOUT phase
+            // to keep polling active
             if (!prev) {
               return {
-                phase: 'idle' as const,
                 currentQuestionID: null,
                 players: newPlayers,
                 answers: {},
-              };
+              } as SessionState;
             }
             
             return {

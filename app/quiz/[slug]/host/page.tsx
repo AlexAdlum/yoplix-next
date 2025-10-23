@@ -241,7 +241,6 @@ export default function HostPage({ params }: HostPageProps) {
       stopped = true;
       console.log('[HOST] Stopping lobby polling');
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, session?.phase, session?.currentQuestionID, params.slug]);
 
   // Poll game state
@@ -457,7 +456,9 @@ export default function HostPage({ params }: HostPageProps) {
         return;
       } else {
         const error = await res.json().catch(() => ({ error: 'Unknown error' }));
-        alert(`Ошибка: ${error.error || 'Неизвестная ошибка'}`);
+        const errorMsg = error.details ? `${error.error}: ${error.details}` : error.error || 'Неизвестная ошибка';
+        console.error('[HOST] Next question error:', error);
+        alert(`Ошибка: ${errorMsg}`);
       }
     } catch (error) {
       console.error('Error moving to next question:', error);

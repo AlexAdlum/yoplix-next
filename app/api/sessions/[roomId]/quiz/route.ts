@@ -191,12 +191,30 @@ export async function POST(
         const result = await withRedisLock(lockKey, 3000, async () => {
           const state = await getSessionState(roomId);
           if (!state) {
+            console.error('[NEXT] Session not found:', roomId);
             return { error: "Session not found", status: 404 };
+          }
+
+          // Проверяем наличие необходимых полей
+          if (typeof state.currentQuestionIndex !== 'number') {
+            console.error('[NEXT] Invalid state.currentQuestionIndex:', state.currentQuestionIndex);
+            return { error: "Invalid quiz state (missing currentQuestionIndex)", status: 500 };
+          }
+
+          if (!Array.isArray(state.selectedQuestions)) {
+            console.error('[NEXT] Invalid state.selectedQuestions:', state.selectedQuestions);
+            return { error: "Invalid quiz state (missing selectedQuestions)", status: 500 };
           }
 
           const nextIndex = state.currentQuestionIndex + 1;
           
-          console.log('[NEXT]', { roomId, nextIndex, totalQuestions: state.selectedQuestions.length });
+          console.log('[NEXT]', { 
+            roomId, 
+            currentIndex: state.currentQuestionIndex,
+            nextIndex, 
+            totalQuestions: state.selectedQuestions.length,
+            selectedQuestions: state.selectedQuestions
+          });
           
           if (nextIndex >= state.selectedQuestions.length) {
             // Игра завершена
@@ -215,11 +233,17 @@ export async function POST(
 
           // Переходим к следующему вопросу
           const nextQuestionId = state.selectedQuestions[nextIndex];
+          
+          if (!nextQuestionId) {
+            console.error('[NEXT] nextQuestionId is null/undefined at index', nextIndex);
+            return { error: "Invalid question ID at index " + nextIndex, status: 500 };
+          }
+
           const nextQuestion = getQuestionById(nextQuestionId);
           
           if (!nextQuestion) {
-            console.error('[NEXT] Question not found:', nextQuestionId);
-            return { error: "Next question not found", status: 404 };
+            console.error('[NEXT] Question not found in database:', nextQuestionId);
+            return { error: "Next question not found: " + nextQuestionId, status: 404 };
           }
 
           const enrichedQuestion = enrichQuestionWithMechanics(nextQuestion);
@@ -266,7 +290,11 @@ export async function POST(
           return NextResponse.json({ error: 'BUSY' }, { status: 429 });
         }
         console.error('[NEXT] Unexpected error:', error);
-        return NextResponse.json({ error: 'INTERNAL' }, { status: 500 });
+        console.error('[NEXT] Error stack:', error instanceof Error ? error.stack : 'no stack');
+        return NextResponse.json({ 
+          error: 'INTERNAL', 
+          details: error instanceof Error ? error.message : String(error) 
+        }, { status: 500 });
       }
     }
 

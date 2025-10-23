@@ -539,7 +539,7 @@ export default function HostPage({ params }: HostPageProps) {
                 </button>
               )}
               
-              {!session?.currentQuestionID && session?.phase !== 'question' && session?.phase !== 'idle' && (
+              {!session?.currentQuestionID && session?.phase !== 'question' && playersArr.length > 0 && (
                 <button
                   onClick={handleStart}
                   className="px-8 py-4 bg-gradient-to-r from-yellow-400 via-pink-500 to-blue-500 text-white font-extrabold text-lg rounded-xl shadow-2xl hover:scale-105 transform transition-all"

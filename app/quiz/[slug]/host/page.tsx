@@ -189,26 +189,32 @@ export default function HostPage({ params }: HostPageProps) {
         if (res.ok) {
           const data = await res.json();
           const playersList = Array.isArray(data?.players) ? data.players : [];
-          console.log('[HOST] players', playersList.length);
+          console.log('[HOST] players', playersList.length, playersList);
           
-          if (playersList.length > 0) {
-            // Update session with players
-            setSession(prev => prev ? {
+          // Always update session, even if players list is empty
+          setSession(prev => {
+            if (!prev) return null;
+            
+            const newPlayers = playersList.reduce((acc: Record<string, PlayerScore>, p: Record<string, unknown>) => {
+              const playerId = (p.id || p.playerId) as string;
+              acc[playerId] = {
+                playerId,
+                nickname: p.nickname as string,
+                avatarUrl: p.avatarUrl as string,
+                totalPoints: (p.score as number) || 0,
+                correctCount: (p.correct as number) || 0,
+                totalTimeCorrectMs: (p.totalCorrectTimeMs as number) || 0,
+              };
+              return acc;
+            }, {});
+            
+            console.log('[HOST] Updating session.players:', Object.keys(newPlayers).length);
+            
+            return {
               ...prev,
-              players: playersList.reduce((acc: Record<string, PlayerScore>, p: Record<string, unknown>) => {
-                const playerId = (p.id || p.playerId) as string;
-                acc[playerId] = {
-                  playerId,
-                  nickname: p.nickname as string,
-                  avatarUrl: p.avatarUrl as string,
-                  totalPoints: (p.score as number) || 0,
-                  correctCount: (p.correct as number) || 0,
-                  totalTimeCorrectMs: (p.totalCorrectTimeMs as number) || 0,
-                };
-                return acc;
-              }, {})
-            } : null);
-          }
+              players: newPlayers
+            };
+          });
         } else {
           console.warn('[HOST] players status', res.status);
         }
@@ -447,7 +453,17 @@ export default function HostPage({ params }: HostPageProps) {
             </div>
 
             {playersArr.length === 0 ? (
-              <p className="text-gray-500">Ожидание игроков…</p>
+              <div>
+                <p className="text-gray-500 mb-4">Ожидание игроков…</p>
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="text-xs text-gray-400 bg-gray-50 p-3 rounded">
+                    <div>Debug Info:</div>
+                    <div>• session?.players: {session?.players ? Object.keys(session.players).length : 'null'}</div>
+                    <div>• playersArr.length: {playersArr.length}</div>
+                    <div>• Polling active: {session?.phase !== 'question' && session?.phase !== 'idle' ? 'YES' : 'NO'}</div>
+                  </div>
+                )}
+              </div>
             ) : (
               <ul className="space-y-3">
                 {playersArr.map((p) => {

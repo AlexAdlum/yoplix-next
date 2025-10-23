@@ -171,8 +171,8 @@ export default function HostPage({ params }: HostPageProps) {
     
     console.log('[HOST] slug=%s roomId=%s phase=%s', params.slug, roomId, session?.phase || 'lobby');
     
-    // Poll only in lobby phase (not during game)
-    if (session?.phase === 'question') return;
+    // Stop polling during game (question, reveal, or idle after game)
+    if (session?.phase === 'question' || session?.phase === 'reveal' || session?.currentQuestionID) return;
     
     let stopped = false;
     console.log('[HOST] Starting lobby polling for players');
@@ -241,7 +241,8 @@ export default function HostPage({ params }: HostPageProps) {
       stopped = true;
       console.log('[HOST] Stopping lobby polling');
     };
-  }, [roomId, session?.phase, params.slug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, session?.phase, session?.currentQuestionID, params.slug]);
 
   // Poll game state
   useEffect(() => {

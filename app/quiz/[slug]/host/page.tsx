@@ -257,21 +257,91 @@ export default function HostPage({ params }: HostPageProps) {
         if (res.ok) {
           const data = await res.json();
           if (!data.finished) {
-            console.log('[HOST fetchGameState] Players update:', Object.keys(data.players || {}).length, 'players');
-            console.log('[HOST fetchGameState] Answers update:', Object.keys(data.answers || {}).length, 'answers');
-            
-            setSession({
-              phase: data.phase || 'idle',
-              currentQuestionID: data.currentQuestionID || null,
-              players: data.players || {},
-              answers: data.answers || {},
-              currentQuestion: data.question ? {
-                id: data.currentQuestionID,
-                question: data.question.question || '',
-                promptText: data.promptText,
-                options: data.question.answers || [],
-                comment: data.comment,
-              } : undefined,
+            // Обновляем ТОЛЬКО если данные изменились
+            setSession(prev => {
+              const newPlayers = data.players || {};
+              const newAnswers = data.answers || {};
+              const newQuestionID = data.currentQuestionID || null;
+              const newPhase = data.phase || 'idle';
+              
+              // Если данных еще нет, создаём начальный state
+              if (!prev) {
+                console.log('[HOST fetchGameState] Initial state');
+                return {
+                  phase: newPhase,
+                  currentQuestionID: newQuestionID,
+                  players: newPlayers,
+                  answers: newAnswers,
+                  currentQuestion: data.question ? {
+                    id: data.currentQuestionID,
+                    question: data.question.question || '',
+                    promptText: data.promptText,
+                    options: data.question.answers || [],
+                    comment: data.comment,
+                  } : undefined,
+                };
+              }
+              
+              // Умная проверка изменений (глубокое сравнение для players и answers)
+              const playersKeys = Object.keys(newPlayers);
+              const prevPlayersKeys = Object.keys(prev.players || {});
+              
+              let playersChanged = playersKeys.length !== prevPlayersKeys.length;
+              if (!playersChanged) {
+                // Сравниваем каждого игрока
+                for (const key of playersKeys) {
+                  const p1 = newPlayers[key];
+                  const p2 = prev.players?.[key];
+                  if (!p2 || 
+                      p1.totalPoints !== p2.totalPoints || 
+                      p1.correctCount !== p2.correctCount || 
+                      p1.totalTimeCorrectMs !== p2.totalTimeCorrectMs) {
+                    playersChanged = true;
+                    break;
+                  }
+                }
+              }
+              
+              const answersKeys = Object.keys(newAnswers);
+              const prevAnswersKeys = Object.keys(prev.answers || {});
+              let answersChanged = answersKeys.length !== prevAnswersKeys.length;
+              if (!answersChanged) {
+                // Сравниваем каждый ответ
+                for (const key of answersKeys) {
+                  const a1 = newAnswers[key];
+                  const a2 = prev.answers?.[key];
+                  if (!a2 || a1.isCorrect !== a2.isCorrect || a1.at !== a2.at || a1.option !== a2.option) {
+                    answersChanged = true;
+                    break;
+                  }
+                }
+              }
+              
+              const questionChanged = prev.currentQuestionID !== newQuestionID;
+              const phaseChanged = prev.phase !== newPhase;
+              
+              // Если ничего не изменилось - НЕ обновляем state (избегаем перерендера)
+              if (!playersChanged && !answersChanged && !questionChanged && !phaseChanged) {
+                return prev;
+              }
+              
+              console.log('[HOST fetchGameState] State changed:', { playersChanged, answersChanged, questionChanged, phaseChanged });
+              
+              // Обновляем только изменённые части
+              return {
+                ...prev,
+                phase: newPhase,
+                currentQuestionID: newQuestionID,
+                players: playersChanged ? newPlayers : prev.players,
+                answers: answersChanged ? newAnswers : prev.answers,
+                currentQuestion: questionChanged && data.question ? {
+                  id: data.currentQuestionID,
+                  question: data.question.question || '',
+                  promptText: data.promptText,
+                  options: data.question.answers || [],
+                  comment: data.comment,
+                } : prev.currentQuestion,
+              };
             });
           } else {
             // Викторина завершена

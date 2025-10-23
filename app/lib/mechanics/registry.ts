@@ -77,7 +77,12 @@ export function registerMechanics(type: string, handler: MechanicsHandler): void
 export function getMechanics(type: string): MechanicsHandler {
   const handler = mechanicsRegistry[type];
   if (!handler) {
-    throw new Error(`Mechanics not found: ${type}`);
+    console.warn(`[MECHANICS] Type "${type}" not found, using fallback "simple4"`);
+    const fallback = mechanicsRegistry['simple4'];
+    if (!fallback) {
+      throw new Error(`Mechanics not found: ${type} (and fallback "simple4" also missing)`);
+    }
+    return fallback;
   }
   return handler;
 }

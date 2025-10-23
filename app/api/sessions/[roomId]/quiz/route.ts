@@ -343,6 +343,7 @@ export async function GET(
       return NextResponse.json({
         finished: true,
         message: "No active question",
+        players: state?.players || {},
       });
     }
 

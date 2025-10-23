@@ -344,8 +344,13 @@ export default function HostPage({ params }: HostPageProps) {
               };
             });
           } else {
-            // Викторина завершена
-            setSession(prev => prev ? { ...prev, phase: 'idle', currentQuestionID: null } : null);
+            // Викторина завершена - обновляем финальные данные игроков
+            setSession(prev => prev ? { 
+              ...prev, 
+              phase: 'idle', 
+              currentQuestionID: null,
+              players: data.players || prev.players
+            } : null);
           }
         }
       } catch (error) {

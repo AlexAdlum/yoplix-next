@@ -24,7 +24,7 @@ type PlayerAnswer = {
 };
 
 type SessionState = {
-  phase: 'idle' | 'question' | 'reveal';
+  phase: 'lobby' | 'idle' | 'question' | 'reveal';
   currentQuestionID: number | null;
   players: Record<string, PlayerScore>;
   answers: Record<string, PlayerAnswer>;
@@ -208,13 +208,13 @@ export default function HostPage({ params }: HostPageProps) {
             
             console.log('[HOST] Updating session.players:', Object.keys(newPlayers).length, 'prev exists:', !!prev);
             
-            // If no session yet, create minimal session state WITHOUT phase
-            // to keep polling active
+            // If no session yet, create minimal session state WITH lobby phase
             if (!prev) {
               return {
                 currentQuestionID: null,
                 players: newPlayers,
                 answers: {},
+                phase: 'lobby',
               } as SessionState;
             }
             
@@ -247,8 +247,8 @@ export default function HostPage({ params }: HostPageProps) {
   useEffect(() => {
     if (!roomId) return;
     
-    // Only fetch game state when game is active (not in lobby)
-    if (!session || session.phase === 'idle') {
+    // Only fetch game state when game is active (not in lobby or idle)
+    if (!session || session.phase === 'lobby' || session.phase === 'idle') {
       return;
     }
 

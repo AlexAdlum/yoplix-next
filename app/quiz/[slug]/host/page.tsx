@@ -368,7 +368,7 @@ export default function HostPage({ params }: HostPageProps) {
     const timer = window.setInterval(fetchGameState, 1000);
     
     return () => window.clearInterval(timer);
-  }, [roomId]);
+  }, [roomId, session]);
 
   if (!quiz) {
     return (
@@ -447,19 +447,41 @@ export default function HostPage({ params }: HostPageProps) {
     if (!roomId || isNextQuestionLoading) return;
     
     setIsNextQuestionLoading(true);
+    console.log('[HOST] Starting next question transition:', { roomId });
+    
     try {
       const res = await fetch(`/api/sessions/${roomId}/quiz`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          'Cache-Control': 'no-cache'
+        },
+        cache: 'no-store',
         body: JSON.stringify({ action: "next" }),
       });
       
+      console.log('[HOST] Next question response status:', res.status);
+      
       if (res.ok) {
         const data = await res.json();
+        console.log('[HOST] Next question response data:', data);
+        
         if (data.finished) {
+          console.log('[HOST] Quiz finished');
           setSession(prev => prev ? { ...prev, phase: 'idle', currentQuestionID: null } : null);
+        } else if (data.ok) {
+          console.log('[HOST] Question transition successful:', { 
+            from: data.from, 
+            to: data.to, 
+            skippedPending: data.skippedPending 
+          });
+          
+          if (data.skippedPending) {
+            console.warn('[HOST] Some players were skipped due to timeout');
+          }
         }
       } else if (res.status === 429) {
+        console.log('[HOST] Server busy, retrying in 500ms');
         await new Promise(resolve => setTimeout(resolve, 500));
         setIsNextQuestionLoading(false);
         handleNext();
@@ -468,10 +490,17 @@ export default function HostPage({ params }: HostPageProps) {
         const error = await res.json().catch(() => ({ error: 'Unknown error' }));
         const errorMsg = error.details ? `${error.error}: ${error.details}` : error.error || 'Неизвестная ошибка';
         console.error('[HOST] Next question error:', error);
-        alert(`Ошибка: ${errorMsg}`);
+        
+        // Показываем toast вместо alert
+        if (error.error === 'Not all players answered yet') {
+          console.log('[HOST] Waiting for more answers:', error.details);
+          // Не показываем ошибку, просто ждем
+        } else {
+          alert(`Ошибка: ${errorMsg}`);
+        }
       }
     } catch (error) {
-      console.error('Error moving to next question:', error);
+      console.error('[HOST] Next question network error:', error);
       alert('Ошибка сети при переходе к следующему вопросу');
     } finally {
       setTimeout(() => setIsNextQuestionLoading(false), 800);
@@ -495,6 +524,19 @@ export default function HostPage({ params }: HostPageProps) {
             >
               Назад
             </Link>
+            {/* Кнопка диагностики (только в dev) */}
+            {process.env.NODE_ENV === 'development' && roomId && (
+              <button
+                onClick={() => {
+                  const debugUrl = `/api/debug/session?roomId=${roomId}`;
+                  window.open(debugUrl, '_blank');
+                }}
+                className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded transition-colors"
+                title="Открыть диагностику сессии"
+              >
+                🔍 Диагностика
+              </button>
+            )}
           </div>
         </div>
       </header>

@@ -1,5 +1,15 @@
-// lib/sessionKeys.ts
-export const keyState   = (roomId: string) => `session:${roomId}:state`;
-export const keyPlayers = (roomId: string) => `session:${roomId}:players`;
-export const keyEvents  = (roomId: string) => `session:${roomId}:events`;
+/**
+ * Ключи для Redis сессий
+ */
 
+export function keyState(roomId: string): string {
+  return `session:${roomId}:state`;
+}
+
+export function keyPlayers(roomId: string): string {
+  return `session:${roomId}:players`;
+}
+
+export function keyEvents(roomId: string): string {
+  return `session:${roomId}:events`;
+}

@@ -30,7 +30,10 @@ export async function POST(req: NextRequest) {
     console.log('[API] POST /sessions', { slug, maybeRoomId });
     
     if (!slug) {
-      return NextResponse.json({ error: 'BAD_REQUEST: slug is required' }, { status: 400 });
+      return NextResponse.json({ error: 'BAD_REQUEST: slug is required' }, { 
+        status: 400,
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+      });
     }
 
     const roomId = maybeRoomId || crypto.randomUUID();
@@ -41,7 +44,10 @@ export async function POST(req: NextRequest) {
     
     if (existingState) {
       console.log('[API] Session already exists:', roomId);
-      return NextResponse.json({ ok: true, roomId }, { status: 200 });
+      return NextResponse.json({ ok: true, roomId }, { 
+        status: 200,
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+      });
     }
 
     // Создаём новую сессию
@@ -59,9 +65,15 @@ export async function POST(req: NextRequest) {
     
     console.log('[API] New session created:', { roomId, slug });
     
-    return NextResponse.json({ ok: true, roomId }, { status: 201 });
+    return NextResponse.json({ ok: true, roomId }, { 
+      status: 201,
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+    });
   } catch (e) {
     console.error('[SESSION_CREATE] Error:', e);
-    return NextResponse.json({ error: 'INTERNAL' }, { status: 500 });
+    return NextResponse.json({ error: 'INTERNAL' }, { 
+      status: 500,
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+    });
   }
 }

@@ -42,16 +42,25 @@ export async function POST(
     console.log('[POST players] roomId=%s slug=%s nick=%s', roomId, slug, nickname);
 
     if (!roomId || !slug) {
-      return NextResponse.json({ error: 'BAD_REQUEST' }, { status: 400 });
+      return NextResponse.json({ error: 'BAD_REQUEST' }, { 
+        status: 400,
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+      });
     }
     if (!nickname || !avatarUrl) {
-      return NextResponse.json({ error: 'BAD_PLAYER' }, { status: 400 });
+      return NextResponse.json({ error: 'BAD_PLAYER' }, { 
+        status: 400,
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+      });
     }
 
     const stateStr = await redis.get(keyState(roomId)) as string | null;
     if (!stateStr) {
       console.warn('[POST players] SESSION_NOT_FOUND roomId=%s', roomId);
-      return NextResponse.json({ error: 'SESSION_NOT_FOUND' }, { status: 404 });
+      return NextResponse.json({ error: 'SESSION_NOT_FOUND' }, { 
+        status: 404,
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+      });
     }
 
     const player = {
@@ -67,6 +76,29 @@ export async function POST(
 
     await arrAppendSafe(roomId, player);
     
+    // Также добавляем игрока в state.players для совместимости
+    try {
+      const stateStr = await redis.get(keyState(roomId)) as string | null;
+      if (stateStr) {
+        const state = JSON.parse(stateStr);
+        if (!state.players) {
+          state.players = {};
+        }
+        state.players[player.id] = {
+          playerId: player.id,
+          nickname: player.nickname,
+          avatarUrl: player.avatarUrl,
+          totalPoints: 0,
+          correctCount: 0,
+          totalTimeCorrectMs: 0,
+        };
+        await redis.set(keyState(roomId), JSON.stringify(state));
+        console.log('[POST players] Added to state.players:', player.id);
+      }
+    } catch (e) {
+      console.warn('[POST players] Failed to sync with state.players (non-critical):', e);
+    }
+    
     // Publish event (ignore errors if publish not available)
     try {
       const redisWithPublish = redis as { publish?: (channel: string, message: string) => Promise<unknown> };
@@ -81,11 +113,14 @@ export async function POST(
     
     return NextResponse.json({ ok: true, player }, {
       status: 200,
-      headers: { 'Cache-Control': 'no-store' },
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
     });
   } catch (e) {
     console.error('[POST players] ERROR', e);
-    return NextResponse.json({ error: 'INTERNAL' }, { status: 500 });
+    return NextResponse.json({ error: 'INTERNAL' }, { 
+      status: 500,
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+    });
   }
 }
 
@@ -97,7 +132,10 @@ export async function GET(
     const { roomId } = await params;
     
     if (!roomId) {
-      return NextResponse.json({ error: 'BAD_REQUEST' }, { status: 400 });
+      return NextResponse.json({ error: 'BAD_REQUEST' }, { 
+        status: 400,
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+      });
     }
     
     const playersStr = await redis.get(keyPlayers(roomId)) as string | null;
@@ -116,10 +154,13 @@ export async function GET(
     
     return NextResponse.json({ ok: true, players }, {
       status: 200,
-      headers: { 'Cache-Control': 'no-store' },
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' },
     });
   } catch (e) {
     console.error('[GET players] ERROR', e);
-    return NextResponse.json({ error: 'INTERNAL' }, { status: 500 });
+    return NextResponse.json({ error: 'INTERNAL' }, { 
+      status: 500,
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+    });
   }
 }

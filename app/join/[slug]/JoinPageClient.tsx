@@ -299,47 +299,69 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
 
   async function handleAnswerSelect(answer: string) {
     if (!roomId || !playerId || !currentQuestion || isSubmittingAnswer) {
-      console.log('handleAnswerSelect - blocked:', { roomId: !!roomId, playerId: !!playerId, currentQuestion: !!currentQuestion, isSubmittingAnswer });
+      console.log('[PLAYER] handleAnswerSelect - blocked:', { 
+        roomId: !!roomId, 
+        playerId: !!playerId, 
+        currentQuestion: !!currentQuestion, 
+        isSubmittingAnswer 
+      });
       return;
     }
     
     setIsSubmittingAnswer(true);
-    console.log('handleAnswerSelect - submitting answer:', answer);
+    console.log('[PLAYER] Submitting answer:', { roomId, playerId, answer });
     
     try {
-      const res = await fetch(`/api/sessions/${roomId}/quiz`, {
+      const res = await fetch(`/api/sessions/${roomId}/answers`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
           'Cache-Control': 'no-cache'
         },
+        cache: 'no-store',
         body: JSON.stringify({ 
-          action: "answer",
           playerId, 
-          option: answer,
-          nickname: nickname.trim(),
-          avatarUrl: avatar,
+          answer
         }),
       });
       
-      console.log('handleAnswerSelect - response status:', res.status);
+      console.log('[PLAYER] Answer response status:', res.status);
       
       if (res.ok) {
         const data = await res.json();
-        console.log('handleAnswerSelect - response data:', data);
-        setIsCorrect(data.isCorrect);
-        setShowResult(true);
+        console.log('[PLAYER] Answer response data:', data);
         
-        // Don't hide result automatically - wait for question change
+        if (data.duplicate) {
+          console.log('[PLAYER] Duplicate answer detected, using existing result');
+          setIsCorrect(data.correct);
+          setShowResult(true);
+        } else if (data.accepted) {
+          console.log('[PLAYER] Answer accepted:', { correct: data.correct, points: data.points });
+          setIsCorrect(data.correct);
+          setShowResult(true);
+        } else {
+          console.error('[PLAYER] Answer not accepted:', data);
+          alert(`Ответ не принят: ${data.error || 'Неизвестная ошибка'}`);
+        }
+        
         setIsSubmittingAnswer(false);
       } else {
         const errorData = await res.json().catch(() => ({ error: 'Failed to parse error response' }));
-        console.error('handleAnswerSelect - error response:', errorData);
-        alert(`Ошибка отправки ответа: ${errorData.error || 'Неизвестная ошибка'}`);
+        console.error('[PLAYER] Answer error response:', errorData);
+        
+        if (errorData.error === 'PLAYER_NOT_IN_ROOM') {
+          alert('Игрок не найден в комнате. Перезагрузите страницу.');
+        } else if (errorData.error === 'SESSION_NOT_FOUND') {
+          alert('Сессия не найдена. Комната была закрыта.');
+        } else if (errorData.error === 'No active question') {
+          alert('Нет активного вопроса. Дождитесь следующего вопроса.');
+        } else {
+          alert(`Ошибка отправки ответа: ${errorData.error || 'Неизвестная ошибка'}`);
+        }
         setIsSubmittingAnswer(false);
       }
     } catch (error) {
-      console.error('handleAnswerSelect - network error:', error);
+      console.error('[PLAYER] Answer network error:', error);
       alert('Ошибка сети при отправке ответа');
       setIsSubmittingAnswer(false);
     }

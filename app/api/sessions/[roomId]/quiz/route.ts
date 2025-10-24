@@ -70,7 +70,10 @@ export async function POST(
       const quizQuestions = (questions as QuizQuestion[]).filter(q => q.Slug === slug);
       
       if (quizQuestions.length === 0) {
-        return NextResponse.json({ error: "No questions found for this quiz" }, { status: 404 });
+        return NextResponse.json({ error: "No questions found for this quiz" }, { 
+          status: 404,
+          headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+        });
       }
 
       // Выбираем случайные 15 вопросов
@@ -117,6 +120,8 @@ export async function POST(
         promptText: presentation.promptText,
         currentQuestion: 1,
         totalQuestions: selectedIds.length,
+      }, {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
       });
     }
 
@@ -131,12 +136,18 @@ export async function POST(
 
       const state = await getSessionState(roomId);
       if (!state || state.currentQuestionID === null) {
-        return NextResponse.json({ error: "No active question" }, { status: 400 });
+        return NextResponse.json({ error: "No active question" }, { 
+          status: 400,
+          headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+        });
       }
 
       const question = getQuestionById(state.currentQuestionID);
       if (!question) {
-        return NextResponse.json({ error: "Question not found" }, { status: 404 });
+        return NextResponse.json({ error: "Question not found" }, { 
+          status: 404,
+          headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+        });
       }
 
       const enrichedQuestion = enrichQuestionWithMechanics(question);
@@ -179,6 +190,8 @@ export async function POST(
         correctAnswer: enrichedQuestion.answer1,
         comment: enrichedQuestion.comment,
         allAnswered,
+      }, {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
       });
     }
 
@@ -189,11 +202,29 @@ export async function POST(
       
       try {
         const result = await withRedisLock(lockKey, 3000, async () => {
+          const startTime = Date.now();
           const state = await getSessionState(roomId);
+          
           if (!state) {
             console.error('[NEXT] Session not found:', roomId);
             return { error: "Session not found", status: 404 };
           }
+
+          const prevQuestionId = state.currentQuestionID;
+          const prevIndex = state.currentQuestionIndex;
+          const activePlayersCount = Object.keys(state.players || {}).length;
+          const answeredCount = Object.keys(state.answers || {}).length;
+          const questionAge = state.questionStartedAt ? Date.now() - state.questionStartedAt : 0;
+
+          console.log('[NEXT] Starting transition:', {
+            roomId,
+            prevQuestionId,
+            prevIndex,
+            activePlayersCount,
+            answeredCount,
+            questionAge,
+            phase: state.phase
+          });
 
           // Проверяем наличие необходимых полей
           if (typeof state.currentQuestionIndex !== 'number') {
@@ -208,13 +239,39 @@ export async function POST(
 
           const nextIndex = state.currentQuestionIndex + 1;
           
-          console.log('[NEXT]', { 
-            roomId, 
-            currentIndex: state.currentQuestionIndex,
-            nextIndex, 
-            totalQuestions: state.selectedQuestions.length,
-            selectedQuestions: state.selectedQuestions
-          });
+          // Проверяем, можно ли переходить к следующему вопросу
+          const allAnswered = answeredCount >= activePlayersCount;
+          const canProceed = allAnswered || questionAge > 5000; // 5 секунд таймаут
+          const skippedPending = !allAnswered && questionAge > 5000;
+
+          if (!canProceed) {
+            console.log('[NEXT] Cannot proceed yet:', {
+              roomId,
+              answeredCount,
+              activePlayersCount,
+              questionAge,
+              allAnswered
+            });
+            return { 
+              error: "Not all players answered yet", 
+              status: 400,
+              details: {
+                answeredCount,
+                activePlayersCount,
+                questionAge,
+                canProceedAfter: 5000 - questionAge
+              }
+            };
+          }
+
+          if (skippedPending) {
+            console.log('[NEXT] Skipping pending players due to timeout:', {
+              roomId,
+              answeredCount,
+              activePlayersCount,
+              questionAge
+            });
+          }
           
           if (nextIndex >= state.selectedQuestions.length) {
             // Игра завершена
@@ -222,11 +279,18 @@ export async function POST(
             state.currentQuestionID = null;
             await saveSessionState(roomId, state);
 
-            console.log('[NEXT] Quiz finished for room', roomId);
+            console.log('[NEXT] Quiz finished for room', roomId, {
+              totalQuestions: state.selectedQuestions.length,
+              completedQuestions: nextIndex
+            });
             
             return {
+              ok: true,
               finished: true,
               message: "Викторина завершена",
+              from: prevQuestionId,
+              to: null,
+              skippedPending,
               status: 200,
             };
           }
@@ -251,9 +315,13 @@ export async function POST(
           const presentation = handler.presentQuestion(enrichedQuestion);
 
           console.log('[NEXT] Moving to question:', { 
-            questionID: nextQuestionId, 
+            roomId,
+            from: prevQuestionId,
+            to: nextQuestionId,
+            prevIndex,
             nextIndex, 
-            question: enrichedQuestion.question 
+            question: enrichedQuestion.question,
+            skippedPending
           });
 
           // Обновляем состояние
@@ -267,7 +335,20 @@ export async function POST(
 
           await saveSessionState(roomId, state);
 
+          const responseTime = Date.now() - startTime;
+          console.log('[NEXT] Transition completed:', {
+            roomId,
+            from: prevQuestionId,
+            to: nextQuestionId,
+            responseTime,
+            skippedPending
+          });
+
           return {
+            ok: true,
+            from: prevQuestionId,
+            to: nextQuestionId,
+            skippedPending,
             question: {
               ...enrichedQuestion,
               answers: presentation.options,
@@ -280,21 +361,33 @@ export async function POST(
         });
 
         if ('error' in result) {
-          return NextResponse.json({ error: result.error }, { status: result.status });
+          return NextResponse.json({ error: result.error }, { 
+            status: result.status,
+            headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+          });
         }
         
-        return NextResponse.json(result, { status: result.status });
+        return NextResponse.json(result, { 
+          status: result.status,
+          headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+        });
         
       } catch (error) {
         if (error instanceof Error && error.message === 'LOCKED') {
-          return NextResponse.json({ error: 'BUSY' }, { status: 429 });
+          return NextResponse.json({ error: 'BUSY' }, { 
+            status: 429,
+            headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+          });
         }
         console.error('[NEXT] Unexpected error:', error);
         console.error('[NEXT] Error stack:', error instanceof Error ? error.stack : 'no stack');
         return NextResponse.json({ 
           error: 'INTERNAL', 
           details: error instanceof Error ? error.message : String(error) 
-        }, { status: 500 });
+        }, { 
+          status: 500,
+          headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+        });
       }
     }
 
@@ -307,17 +400,25 @@ export async function POST(
         await saveSessionState(roomId, state);
       }
 
-      return NextResponse.json({ message: "Quiz ended" });
+      return NextResponse.json({ message: "Quiz ended" }, {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+      });
     }
 
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid action" }, { 
+      status: 400,
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+    });
 
   } catch (error) {
     console.error('[Quiz API] Error:', error);
     return NextResponse.json({ 
       error: "Internal server error",
       details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    }, { 
+      status: 500,
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+    });
   }
 }
 
@@ -344,13 +445,18 @@ export async function GET(
         finished: true,
         message: "No active question",
         players: state?.players || {},
+      }, {
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
       });
     }
 
     const question = getQuestionById(state.currentQuestionID);
     if (!question) {
       console.error(`[Quiz API GET] Question ${state.currentQuestionID} not found`);
-      return NextResponse.json({ error: "Question not found" }, { status: 404 });
+      return NextResponse.json({ error: "Question not found" }, { 
+        status: 404,
+        headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+      });
     }
 
     const enrichedQuestion = enrichQuestionWithMechanics(question);
@@ -371,6 +477,8 @@ export async function GET(
       phase: state.phase,
       players: state.players,
       answers: state.answers,
+    }, {
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
     });
 
   } catch (error) {
@@ -378,6 +486,9 @@ export async function GET(
     return NextResponse.json({ 
       error: "Internal server error",
       details: error instanceof Error ? error.message : String(error)
-    }, { status: 500 });
+    }, { 
+      status: 500,
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+    });
   }
 }

@@ -248,7 +248,7 @@ export default function HostPage({ params }: HostPageProps) {
     if (!roomId) return;
     
     // Only fetch game state when game is active (not in lobby)
-    if (!session?.currentQuestionID && session?.phase !== 'question' && session?.phase !== 'reveal') {
+    if (!session || session.phase === 'idle') {
       return;
     }
 

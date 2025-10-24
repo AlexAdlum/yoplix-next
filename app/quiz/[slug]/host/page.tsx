@@ -243,9 +243,14 @@ export default function HostPage({ params }: HostPageProps) {
     };
   }, [roomId, session?.phase, session?.currentQuestionID, params.slug]);
 
-  // Poll game state
+  // Poll game state (only when game is active)
   useEffect(() => {
     if (!roomId) return;
+    
+    // Only fetch game state when game is active (not in lobby)
+    if (!session?.currentQuestionID && session?.phase !== 'question' && session?.phase !== 'reveal') {
+      return;
+    }
 
     async function fetchGameState() {
       try {

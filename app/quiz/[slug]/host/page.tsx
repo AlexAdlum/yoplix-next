@@ -24,7 +24,7 @@ type PlayerAnswer = {
 };
 
 type SessionState = {
-  phase: 'idle' | 'question' | 'reveal';
+  phase: 'lobby' | 'idle' | 'question' | 'reveal';
   currentQuestionID: number | null;
   players: Record<string, PlayerScore>;
   answers: Record<string, PlayerAnswer>;
@@ -65,8 +65,8 @@ export default function HostPage({ params }: HostPageProps) {
     return `https://${domain}/join/${params.slug}?room=${roomId}`;
   }, [params.slug, roomId]);
 
-  // Скрыть QR после старта
-  const showQR = !session?.currentQuestionID && session?.phase !== 'question';
+  // Скрыть QR после старта - показываем только в лобби
+  const showQR = session?.phase === 'lobby';
 
   // Сортировка игроков по убыванию счёта
   const playersArr = useMemo(() => {
@@ -500,8 +500,8 @@ export default function HostPage({ params }: HostPageProps) {
           </pre>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* QR код - показываем только до старта */}
+        <div className={`grid gap-8 ${showQR ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+          {/* QR код - показываем только в лобби */}
           {showQR && (
             <div className="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center">
               <p className="text-gray-700 mb-4 text-center">

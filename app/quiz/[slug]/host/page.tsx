@@ -47,6 +47,16 @@ function avgCorrectTime(totalMs: number, count: number) {
   return count > 0 ? totalMs / count : NaN;
 }
 
+// Helper: проверка, находимся ли мы в прегейме (до старта викторины)
+const isPreGame = (s?: SessionState) => {
+  if (!s) return true; // на самом первом рендере, пока state ещё не получен, показываем QR
+  // Показать QR, если игры ещё не начинались:
+  // - явная фаза лобби
+  // - или фаза idle, но нет текущего вопроса
+  // - или нет currentQuestionID вовсе
+  return s.phase === 'lobby' || (s.phase === 'idle' && !s.currentQuestionID) || !s.currentQuestionID;
+};
+
 export default function HostPage({ params }: HostPageProps) {
   const quiz = getQuizBySlug(params.slug);
   const [roomId, setRoomId] = useState<string>("");
@@ -65,8 +75,8 @@ export default function HostPage({ params }: HostPageProps) {
     return `https://${domain}/join/${params.slug}?room=${roomId}`;
   }, [params.slug, roomId]);
 
-  // Скрыть QR после старта - показываем только в лобби
-  const showQR = session?.phase === 'lobby';
+  // Показывать QR только в прегейме (лобби/idle без вопроса)
+  const showQR = isPreGame(session || undefined);
 
   // Сортировка игроков по убыванию счёта
   const playersArr = useMemo(() => {

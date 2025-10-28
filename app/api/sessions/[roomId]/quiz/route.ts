@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initMechanics, getMechanics } from "@/app/lib/mechanics";
 import { redis } from "@/app/lib/redis";
-import type { SessionState, QuizQuestion } from "@/types/quiz";
+import type { SessionState, QuizQuestion, PlayerScore as TPlayerScore, PlayerAnswer as TPlayerAnswer } from "@/types/quiz";
 import questions from "@/app/data/questions.json";
 import { noStore } from 'next/cache';
 import { pickRandomIds } from '@/app/lib/random';
@@ -14,22 +14,28 @@ initMechanics();
 // Helpers for postgame results
 export const POSTGAME_WAIT_MS = 15 * 60 * 1000;
 
+type PlayerScore = TPlayerScore;
+type PlayerAnswer = TPlayerAnswer;
+
 function computeFinalResults(state: SessionState) {
   const ps = Object.values(state.players ?? {});
-  if (!ps.length) return { winners: [], fastest: null as string | null, mostProductive: null as string | null };
+  if (!ps.length) return { winners: [] as string[], fastest: [] as string[], productive: [] as string[] };
 
   const maxPts = Math.max(...ps.map(p => p.totalPoints ?? 0));
   const winners = ps.filter(p => (p.totalPoints ?? 0) === maxPts).map(p => p.playerId);
 
   const withSpeed = ps.filter(p => (p.correctCount ?? 0) > 0);
-  const fastest = withSpeed.length
-    ? withSpeed.reduce((a, b) => ((a.totalTimeCorrectMs ?? Infinity) < (b.totalTimeCorrectMs ?? Infinity) ? a : b)).playerId
-    : null;
+  const fastest = withSpeed
+    .sort((a, b) => (a.totalTimeCorrectMs ?? Infinity) - (b.totalTimeCorrectMs ?? Infinity))
+    .slice(0, 3)
+    .map(p => p.playerId);
 
   const maxCorr = Math.max(...ps.map(p => p.correctCount ?? 0));
-  const mostProductive = maxCorr > 0 ? (ps.find(p => (p.correctCount ?? 0) === maxCorr)?.playerId ?? null) : null;
+  const productive = maxCorr > 0
+    ? ps.filter(p => (p.correctCount ?? 0) === maxCorr).map(p => p.playerId)
+    : [];
 
-  return { winners, fastest, mostProductive };
+  return { winners, fastest, productive };
 }
 
 /**
@@ -125,15 +131,15 @@ export async function POST(
       (state0 as SessionState).questionStartedAt = now;
       (state0 as SessionState).players = (state0 as SessionState).players || {};
       (state0 as SessionState).answers = {};
-      (state0 as SessionState).firstCorrectPlayerId = null as any;
-      (state0 as SessionState).totalQuestions = selected.length as any;
+      (state0 as SessionState).firstCorrectPlayerId = null;
+      (state0 as SessionState).totalQuestions = selected.length;
 
       const q0 = getQuestionById(selected[0]);
       if (!q0) return NextResponse.json({ error: 'Question not found' }, { status: 404 });
       const firstQuestion = enrichQuestionWithMechanics(q0);
       const handler = getMechanics(firstQuestion.mechanicsType);
       const presentation = handler.presentQuestion(firstQuestion);
-      (state0 as SessionState).shuffledOptions = presentation.options as any;
+      (state0 as SessionState).shuffledOptions = presentation.options;
 
       await saveSessionState(roomId, state0 as SessionState);
 
@@ -345,10 +351,16 @@ export async function POST(
       if (!state) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
       if (state.phase !== 'postgamePending') return NextResponse.json({ error: 'Not in postgamePending' }, { status: 400 });
 
+      const results = computeFinalResults(state);
+      state.lastResults = {
+        playersSnapshot: state.players,
+        endedAt: Date.now(),
+        autoFinishAt: Date.now(),
+      } as unknown as SessionState['lastResults'];
       state.phase = 'idle';
       state.currentQuestionID = null;
       await saveSessionState(roomId, state);
-      return NextResponse.json({ finished: true, lastResults: state.lastResults });
+      return NextResponse.json({ finished: true, lastResults: results });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });

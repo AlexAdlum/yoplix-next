@@ -24,7 +24,7 @@ type PlayerAnswer = {
 };
 
 type SessionState = {
-  phase: 'lobby' | 'idle' | 'question' | 'reveal' | 'complete';
+  phase: 'lobby' | 'idle' | 'question' | 'reveal' | 'postgamePending';
   currentQuestionID: number | null;
   players: Record<string, PlayerScore>;
   answers: Record<string, PlayerAnswer>;
@@ -35,6 +35,12 @@ type SessionState = {
     options: string[];
     comment?: string | null;
   };
+  lastResults?: {
+    winners: string[];
+    fastest?: string | null;
+    mostProductive?: string | null;
+    snapshotAt: number;
+  } | null;
 };
 
 // Утилиты форматирования
@@ -50,7 +56,7 @@ function avgCorrectTime(totalMs: number, count: number) {
 // Helper: проверка, находимся ли мы в прегейме (до старта викторины)
 const isPreGame = (s?: SessionState) => {
   if (!s) return true; // на самом первом рендере, пока state ещё не получен, показываем QR
-  // Показывать QR только когда игра ещё не начиналась
+  if (s.phase === 'postgamePending') return false;
   return s.phase === 'lobby' || (s.phase === 'idle' && !s.currentQuestionID);
 };
 
@@ -62,12 +68,31 @@ export default function HostPage({ params }: HostPageProps) {
   const [session, setSession] = useState<SessionState | null>(null);
   const [isNextQuestionLoading, setIsNextQuestionLoading] = useState(false);
   
-  // Диагностика фазы: лог на каждый рендер
-  console.log('[HOST UI] Rendering phase:', session?.phase);
-  // Диагностика фазы: лог при смене фазы
+  const handleFinish = async () => {
+    if (!roomId) return;
+    setIsNextQuestionLoading(true);
+    try {
+      const res = await fetch(`/api/sessions/${encodeURIComponent(roomId)}/quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'finish' })
+      });
+      const data = await res.json().catch(() => ({}));
+      console.log('[HOST] finish response', data);
+      // polling подхватит переход в idle и lastResults
+    } catch (e) {
+      console.error('[HOST] finish error', e);
+    } finally {
+      setIsNextQuestionLoading(false);
+    }
+  };
+  
+  // Диагностика фазы
   useEffect(() => {
-    console.log('[HOST] Session phase changed:', session?.phase);
-  }, [session?.phase]);
+    if (session?.phase) {
+      console.log('[HOST UI] Rendering phase:', session.phase, { currentQuestionID: session.currentQuestionID, lastResults: !!(session as unknown as { lastResults?: unknown }).lastResults });
+    }
+  }, [session]);
   
   const joinUrl = useMemo(() => {
     if (!roomId) return "";
@@ -639,27 +664,13 @@ export default function HostPage({ params }: HostPageProps) {
               )}
             </div>
 
-            {/* Фаза complete: сообщение и кнопка завершения */}
-            {session?.phase === 'complete' && (
+            {/* Фаза postgamePending: сообщение и кнопка завершения */}
+            {session?.phase === 'postgamePending' && (
               <div className="mt-8 text-center">
                 <p className="text-xl font-semibold text-gray-800 mb-4">Поздравляем! Вы ответили на все вопросы!</p>
                 <button
                   className="px-8 py-3 bg-emerald-600 text-white rounded-xl shadow hover:bg-emerald-700 transition"
-                  onClick={async () => {
-                    if (!roomId) return;
-                    try {
-                      const res = await fetch(`/api/sessions/${encodeURIComponent(roomId)}/quiz`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        cache: 'no-store',
-                        body: JSON.stringify({ action: 'finish' }),
-                      });
-                      if (res.ok) {
-                        const data = await res.json();
-                        setSession(prev => prev ? { ...prev, phase: 'idle' as const } : prev);
-                      }
-                    } catch {}
-                  }}
+                  onClick={handleFinish}
                 >
                   Завершить викторину
                 </button>

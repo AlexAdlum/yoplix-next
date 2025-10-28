@@ -8,6 +8,27 @@ import mechanics from "@/app/data/mechanics.json";
 // Инициализируем механики при загрузке модуля
 initMechanics();
 
+// Helpers for postgame results
+export const POSTGAME_WAIT_MS = 15 * 60 * 1000;
+
+function computeFinalResults(state: SessionState) {
+  const ps = Object.values(state.players ?? {});
+  if (!ps.length) return { winners: [], fastest: null as string | null, mostProductive: null as string | null };
+
+  const maxPts = Math.max(...ps.map(p => p.totalPoints ?? 0));
+  const winners = ps.filter(p => (p.totalPoints ?? 0) === maxPts).map(p => p.playerId);
+
+  const withSpeed = ps.filter(p => (p.correctCount ?? 0) > 0);
+  const fastest = withSpeed.length
+    ? withSpeed.reduce((a, b) => ((a.totalTimeCorrectMs ?? Infinity) < (b.totalTimeCorrectMs ?? Infinity) ? a : b)).playerId
+    : null;
+
+  const maxCorr = Math.max(...ps.map(p => p.correctCount ?? 0));
+  const mostProductive = maxCorr > 0 ? (ps.find(p => (p.correctCount ?? 0) === maxCorr)?.playerId ?? null) : null;
+
+  return { winners, fastest, mostProductive };
+}
+
 /**
  * Получить вопрос по ID
  */
@@ -61,6 +82,17 @@ export async function POST(
     const { action } = body;
 
     console.log(`[Quiz API] POST ${action} for room ${roomId}`);
+
+    // Общая автозавершалка постгейма
+    const s0 = await getSessionState(roomId);
+    if (s0 && s0.phase === 'postgamePending' && typeof s0.postgameAutoFinishAt === 'number' && Date.now() >= s0.postgameAutoFinishAt) {
+      const res = computeFinalResults(s0 as SessionState);
+      (s0 as SessionState).lastResults = { ...res, snapshotAt: Date.now() } as SessionState['lastResults'];
+      (s0 as SessionState).phase = 'idle';
+      (s0 as SessionState).currentQuestionID = null;
+      await saveSessionState(roomId, s0 as SessionState);
+      return NextResponse.json({ finished: true, lastResults: (s0 as SessionState).lastResults, autoFinished: true });
+    }
 
     // ===== START: Начать новый вопрос =====
     if (action === "start") {
@@ -217,20 +249,22 @@ export async function POST(
           });
           
           if (nextIndex >= state.selectedQuestions.length) {
-            // Все вопросы отвечены — переходим в промежуточную фазу "complete"
-            state.phase = 'complete';
-            state.currentQuestionID = null; // нет активного вопроса
-            state.pendingFinishUntil = Date.now() + 15 * 60 * 1000; // 15 минут на ручное завершение
+            // Все вопросы отвечены — включаем postgamePending окно
+            state.phase = 'postgamePending';
+            state.currentQuestionID = null;
+            state.postgameRequestedAt = Date.now();
+            state.postgameAutoFinishAt = Date.now() + (15 * 60 * 1000);
             await saveSessionState(roomId, state);
 
-            console.log('[NEXT] All questions answered. Waiting for host to finish', {
+            console.log('[NEXT] All questions answered. Postgame pending started', {
               roomId,
-              pendingFinishUntil: state.pendingFinishUntil,
+              autoFinishAt: state.postgameAutoFinishAt,
             });
 
             return {
-              finishedPending: true,
+              postgamePending: true,
               message: "Поздравляем! Вы ответили на все вопросы!",
+              autoFinishAt: state.postgameAutoFinishAt,
               status: 200,
             };
           }
@@ -304,62 +338,16 @@ export async function POST(
 
     // ===== FINISH: Ручное завершение игры (ведущий) =====
     if (action === "finish") {
-      let state = await getSessionState(roomId);
-      if (!state) {
-        return NextResponse.json({ error: 'Session not found' }, { status: 404 });
-      }
+      const state = await getSessionState(roomId);
+      if (!state) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      if (state.phase !== 'postgamePending') return NextResponse.json({ error: 'Not in postgamePending' }, { status: 400 });
 
-      function sortWinners(players: NonNullable<SessionState['players']>[string][]) {
-        return [...players].sort((x, y) =>
-          (y.totalPoints - x.totalPoints) ||
-          (y.correctCount - x.correctCount) ||
-          (x.totalTimeCorrectMs - y.totalTimeCorrectMs) ||
-          x.nickname.localeCompare(y.nickname)
-        );
-      }
-      function sortFastest(players: NonNullable<SessionState['players']>[string][]) {
-        return [...players]
-          .filter(p => p.correctCount > 0)
-          .sort((x, y) => {
-            const ax = x.totalTimeCorrectMs / x.correctCount;
-            const ay = y.totalTimeCorrectMs / y.correctCount;
-            return (ax - ay) ||
-                   (y.correctCount - x.correctCount) ||
-                   (y.totalPoints - x.totalPoints) ||
-                   x.nickname.localeCompare(y.nickname);
-          });
-      }
-      function sortProductive(players: NonNullable<SessionState['players']>[string][]) {
-        return [...players].sort((x, y) =>
-          (y.correctCount - x.correctCount) ||
-          (y.totalPoints - x.totalPoints) ||
-          (x.totalTimeCorrectMs - y.totalTimeCorrectMs) ||
-          x.nickname.localeCompare(y.nickname)
-        );
-      }
-
-      function finalizeQuiz(s: SessionState): SessionState {
-        type PS = NonNullable<SessionState['players']>[string];
-        if (!(s as unknown as { finalStats?: unknown }).finalStats) {
-          const playersArr = Object.values(s.players || {}) as PS[];
-          const winners = sortWinners(playersArr).slice(0, 3);
-          const fastest = sortFastest(playersArr).slice(0, 3);
-          const productive = sortProductive(playersArr).slice(0, 3);
-          (s as unknown as { finalStats: unknown }).finalStats = {
-            finishedAt: Date.now(),
-            totalQuestions: Array.isArray(s.selectedQuestions) ? s.selectedQuestions.length : (s.totalQuestions ?? 15),
-            winners, fastest, productive,
-          };
-        }
-        s.phase = 'idle';
-        s.currentQuestionID = null;
-        s.pendingFinishUntil = null;
-        return s;
-      }
-
-      state = finalizeQuiz(state);
+      const res = computeFinalResults(state);
+      state.lastResults = { ...res, snapshotAt: Date.now() } as SessionState['lastResults'];
+      state.phase = 'idle';
+      state.currentQuestionID = null;
       await saveSessionState(roomId, state);
-      return NextResponse.json({ finished: true, message: 'Викторина завершена', finalStats: (state as unknown as { finalStats?: unknown }).finalStats });
+      return NextResponse.json({ finished: true, lastResults: state.lastResults });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
@@ -392,44 +380,26 @@ export async function GET(
     }
 
     if (!state || state.currentQuestionID === null) {
-      // Ленивое автозавершение, если вышло время ожидания
-      if (state?.phase === 'complete' && state.pendingFinishUntil && Date.now() > state.pendingFinishUntil) {
-        type PS = NonNullable<SessionState['players']>[string];
-        const playersArr = Object.values(state.players || {}) as PS[];
-        const sortWinners = (players: PS[]) => [...players].sort((x, y) =>
-          (y.totalPoints - x.totalPoints) ||
-          (y.correctCount - x.correctCount) ||
-          (x.totalTimeCorrectMs - y.totalTimeCorrectMs) ||
-          x.nickname.localeCompare(y.nickname)
-        );
-        const sortFastest = (players: PS[]) => [...players]
-          .filter(p => p.correctCount > 0)
-          .sort((x, y) => {
-            const ax = x.totalTimeCorrectMs / x.correctCount;
-            const ay = y.totalTimeCorrectMs / y.correctCount;
-            return (ax - ay) || (y.correctCount - x.correctCount) || (y.totalPoints - x.totalPoints) || x.nickname.localeCompare(y.nickname);
-          });
-        const sortProductive = (players: PS[]) => [...players].sort((x, y) =>
-          (y.correctCount - x.correctCount) || (y.totalPoints - x.totalPoints) || (x.totalTimeCorrectMs - y.totalTimeCorrectMs) || x.nickname.localeCompare(y.nickname)
-        );
-
-        (state as unknown as { finalStats?: unknown }).finalStats = (state as unknown as { finalStats?: unknown }).finalStats ?? {
-          finishedAt: Date.now(),
-          totalQuestions: Array.isArray(state.selectedQuestions) ? state.selectedQuestions.length : (state.totalQuestions ?? 15),
-          winners: sortWinners(playersArr).slice(0, 3),
-          fastest: sortFastest(playersArr).slice(0, 3),
-          productive: sortProductive(playersArr).slice(0, 3),
-        };
-        state.phase = 'idle';
-        state.currentQuestionID = null;
-        state.pendingFinishUntil = null;
-        await saveSessionState(roomId, state);
-        return NextResponse.json({ finished: true, message: 'Викторина завершена', finalStats: (state as unknown as { finalStats?: unknown }).finalStats });
+      // Если ждём постгейм — вернуть pending
+      if (state?.phase === 'postgamePending') {
+        return NextResponse.json({
+          postgamePending: true,
+          message: 'Поздравляем! Вы ответили на все вопросы!',
+          autoFinishAt: state.postgameAutoFinishAt ?? null,
+          players: state.players,
+          totalQuestions: Array.isArray(state.selectedQuestions) ? state.selectedQuestions.length : 15,
+          phase: state.phase,
+          currentQuestionID: null
+        });
       }
 
-      // Иначе, если мы в ожидании завершения — вернуть finishedPending
-      if (state?.phase === 'complete') {
-        return NextResponse.json({ finishedPending: true, message: 'Поздравляем! Вы ответили на все вопросы!' });
+      // Если завершено и есть lastResults — вернуть вместе с ответом
+      if (state?.phase === 'idle' && (state as SessionState).lastResults) {
+        return NextResponse.json({
+          finished: true,
+          message: 'Викторина завершена',
+          lastResults: (state as SessionState).lastResults
+        });
       }
 
       return NextResponse.json({

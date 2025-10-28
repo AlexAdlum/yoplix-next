@@ -116,7 +116,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
       const res = await fetch(`/api/sessions/${roomId}/quiz`);
       if (res.ok) {
         const data = await res.json();
-        if (data.finishedPending) {
+        if (data.postgamePending) {
           // Фаза complete: показываем финальное сообщение
           setCurrentQuestion(null);
           setShowResult(false);
@@ -136,7 +136,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
         const data = await res.json();
         console.log('Game status check:', data);
         
-        if (data.finishedPending) {
+        if (data.postgamePending) {
           setStarted(true);
           setCurrentQuestion(null);
           return;
@@ -202,6 +202,14 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
       clearInterval(interval);
     };
   }, [roomId, started, loadCurrentQuestion]);
+
+  // Диагностика фазы на клиенте игрока (если сервер присылает phase в ответе)
+  useEffect(() => {
+    try {
+      const phase = (currentQuestion as unknown as { phase?: string } | null)?.phase;
+      if (phase) console.log('[PLAYER UI] phase:', phase);
+    } catch {}
+  }, [currentQuestion]);
 
   // Reset result when question changes from server
   useEffect(() => {

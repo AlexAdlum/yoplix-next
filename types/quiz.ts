@@ -48,7 +48,7 @@ export interface PlayerAnswer {
 /**
  * Фаза игровой сессии
  */
-export type SessionPhase = 'idle' | 'question' | 'reveal' | 'complete';
+export type SessionPhase = 'idle' | 'question' | 'reveal' | 'postgamePending';
 
 /**
  * Состояние игровой сессии
@@ -67,7 +67,16 @@ export interface SessionState {
   totalQuestions: number;
   selectedQuestions: number[]; // IDs выбранных вопросов
   shuffledOptions?: string[]; // перемешанные варианты для текущего вопроса
-  pendingFinishUntil?: number | null; // таймаут автозавершения при phase='complete'
+  // Postgame pending window
+  postgameRequestedAt?: number;     // когда хост нажал "следующий" после 15-го
+  postgameAutoFinishAt?: number;    // дедлайн авто-завершения (now + 15мин)
+  // Снимок итогов по завершению
+  lastResults?: {
+    winners: string[];              // id игроков-победителей
+    fastest?: string | null;        // id самого быстрого
+    mostProductive?: string | null; // id по кол-ву верных
+    snapshotAt: number;
+  } | null;
 }
 
 /**

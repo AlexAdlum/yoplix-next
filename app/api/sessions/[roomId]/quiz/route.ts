@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initMechanics, getMechanics } from "@/app/lib/mechanics";
 import { redis } from "@/app/lib/redis";
-import type { SessionState, QuizQuestion, PlayerScore as TPlayerScore, PlayerAnswer as TPlayerAnswer } from "@/types/quiz";
+import type { SessionState, QuizQuestion } from "@/types/quiz";
 import questions from "@/app/data/questions.json";
 import { noStore } from 'next/cache';
 import { pickRandomIds } from '@/app/lib/random';
@@ -13,9 +13,6 @@ initMechanics();
 
 // Helpers for postgame results
 export const POSTGAME_WAIT_MS = 15 * 60 * 1000;
-
-type PlayerScore = TPlayerScore;
-type PlayerAnswer = TPlayerAnswer;
 
 function computeFinalResults(state: SessionState) {
   const ps = Object.values(state.players ?? {});

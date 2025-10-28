@@ -48,7 +48,7 @@ export interface PlayerAnswer {
 /**
  * Фаза игровой сессии
  */
-export type SessionPhase = 'idle' | 'question' | 'reveal';
+export type SessionPhase = 'idle' | 'question' | 'reveal' | 'complete';
 
 /**
  * Состояние игровой сессии
@@ -67,6 +67,7 @@ export interface SessionState {
   totalQuestions: number;
   selectedQuestions: number[]; // IDs выбранных вопросов
   shuffledOptions?: string[]; // перемешанные варианты для текущего вопроса
+  pendingFinishUntil?: number | null; // таймаут автозавершения при phase='complete'
 }
 
 /**

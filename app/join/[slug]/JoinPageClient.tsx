@@ -116,7 +116,12 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
       const res = await fetch(`/api/sessions/${roomId}/quiz`);
       if (res.ok) {
         const data = await res.json();
-        if (!data.finished) {
+        if (data.finishedPending) {
+          // Фаза complete: показываем финальное сообщение
+          setCurrentQuestion(null);
+          setShowResult(false);
+          setIsSubmittingAnswer(false);
+        } else if (!data.finished) {
           setCurrentQuestion(data.question);
         }
       }
@@ -131,6 +136,12 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
         const data = await res.json();
         console.log('Game status check:', data);
         
+        if (data.finishedPending) {
+          setStarted(true);
+          setCurrentQuestion(null);
+          return;
+        }
+
         // Если есть вопрос и игра не начата - начинаем
         if (!data.finished && data.question && !started) {
           console.log('Game started detected, loading first question');

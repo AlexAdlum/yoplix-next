@@ -24,7 +24,7 @@ type PlayerAnswer = {
 };
 
 type SessionState = {
-  phase: 'lobby' | 'idle' | 'question' | 'reveal';
+  phase: 'lobby' | 'idle' | 'question' | 'reveal' | 'complete';
   currentQuestionID: number | null;
   players: Record<string, PlayerScore>;
   answers: Record<string, PlayerAnswer>;
@@ -50,11 +50,8 @@ function avgCorrectTime(totalMs: number, count: number) {
 // Helper: проверка, находимся ли мы в прегейме (до старта викторины)
 const isPreGame = (s?: SessionState) => {
   if (!s) return true; // на самом первом рендере, пока state ещё не получен, показываем QR
-  // Показать QR, если игры ещё не начинались:
-  // - явная фаза лобби
-  // - или фаза idle, но нет текущего вопроса
-  // - или нет currentQuestionID вовсе
-  return s.phase === 'lobby' || (s.phase === 'idle' && !s.currentQuestionID) || !s.currentQuestionID;
+  // Показывать QR только когда игра ещё не начиналась
+  return s.phase === 'lobby' || (s.phase === 'idle' && !s.currentQuestionID);
 };
 
 export default function HostPage({ params }: HostPageProps) {
@@ -611,8 +608,8 @@ export default function HostPage({ params }: HostPageProps) {
 
             {/* Кнопки управления */}
             <div className="mt-6 flex justify-end gap-3">
-              {/* Кнопка "Следующий вопрос" - показываем ВСЕГДА когда есть текущий вопрос */}
-              {session?.currentQuestionID && (
+              {/* Во время вопроса показываем кнопку "Следующий вопрос" */}
+              {session?.phase === 'question' && session?.currentQuestionID && (
                 <button
                   onClick={handleNext}
                   disabled={isNextQuestionLoading}
@@ -623,7 +620,7 @@ export default function HostPage({ params }: HostPageProps) {
                   {isNextQuestionLoading ? 'Загрузка...' : 'Следующий вопрос'}
                 </button>
               )}
-              
+
               {/* Кнопка "Начать" - только в лобби */}
               {!session?.currentQuestionID && session?.phase !== 'question' && playersArr.length > 0 && (
                 <button
@@ -634,6 +631,33 @@ export default function HostPage({ params }: HostPageProps) {
                 </button>
               )}
             </div>
+
+            {/* Фаза complete: сообщение и кнопка завершения */}
+            {session?.phase === 'complete' && (
+              <div className="mt-8 text-center">
+                <p className="text-xl font-semibold text-gray-800 mb-4">Поздравляем! Вы ответили на все вопросы!</p>
+                <button
+                  className="px-8 py-3 bg-emerald-600 text-white rounded-xl shadow hover:bg-emerald-700 transition"
+                  onClick={async () => {
+                    if (!roomId) return;
+                    try {
+                      const res = await fetch(`/api/sessions/${encodeURIComponent(roomId)}/quiz`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        cache: 'no-store',
+                        body: JSON.stringify({ action: 'finish' }),
+                      });
+                      if (res.ok) {
+                        const data = await res.json();
+                        setSession(prev => prev ? { ...prev, phase: 'idle' as const } : prev);
+                      }
+                    } catch {}
+                  }}
+                >
+                  Завершить викторину
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

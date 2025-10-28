@@ -67,6 +67,9 @@ export default function HostPage({ params }: HostPageProps) {
   const [session, setSession] = useState<SessionState | null>(null);
   const [isNextQuestionLoading, setIsNextQuestionLoading] = useState(false);
   
+  // Optional client-side navigation
+  // const router = useRouter();
+  
   const handleFinish = async () => {
     if (!roomId) return;
     setIsNextQuestionLoading(true);
@@ -78,7 +81,12 @@ export default function HostPage({ params }: HostPageProps) {
       });
       const data = await res.json().catch(() => ({}));
       console.log('[HOST] finish response', data);
-      // polling подхватит переход в idle и lastResults
+      if (data?.finished || data?.ok) {
+        setTimeout(() => {
+          // router.push('/')
+          window.location.href = '/';
+        }, 800);
+      }
     } catch (e) {
       console.error('[HOST] finish error', e);
     } finally {

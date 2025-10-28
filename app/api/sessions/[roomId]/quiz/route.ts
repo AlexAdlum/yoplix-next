@@ -3,10 +3,13 @@ import { initMechanics, getMechanics } from "@/app/lib/mechanics";
 import { redis } from "@/app/lib/redis";
 import type { SessionState, QuizQuestion } from "@/types/quiz";
 import questions from "@/app/data/questions.json";
-import { noStore } from 'next/cache';
 import { pickRandomIds } from '@/app/lib/random';
 import { getQuestionsBySlug } from '@/app/lib/quiz';
 import mechanics from "@/app/data/mechanics.json";
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 // Инициализируем механики при загрузке модуля
 initMechanics();
@@ -83,7 +86,6 @@ export async function POST(
   { params }: { params: Promise<{ roomId: string }> }
 ) {
   try {
-    noStore();
     const { roomId } = await params;
     const body = await req.json() as Record<string, unknown>;
     const { action } = body;

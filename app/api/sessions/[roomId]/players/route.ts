@@ -6,6 +6,7 @@ import { keyPlayers, keyState, keyEvents } from "@/app/lib/sessionKeys";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 async function arrAppendSafe(roomId: string, value: unknown) {
   const k = keyPlayers(roomId);

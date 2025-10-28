@@ -36,11 +36,10 @@ type SessionState = {
     comment?: string | null;
   };
   lastResults?: {
-    winners: string[];
-    fastest?: string | null;
-    mostProductive?: string | null;
-    snapshotAt: number;
-  } | null;
+    playersSnapshot: Record<string, PlayerScore>;
+    endedAt: number;
+    autoFinishAt: number;
+  } | false;
 };
 
 // Утилиты форматирования
@@ -106,11 +105,19 @@ export default function HostPage({ params }: HostPageProps) {
 
   // Показывать QR только в прегейме (лобби/idle без вопроса)
   const showQR = isPreGame(session || undefined);
+  
+  // Источник игроков: в постгейме используем снапшот
+  const playersForUi = useMemo(() => {
+    if (session?.lastResults && typeof session.lastResults === 'object' && 'playersSnapshot' in session.lastResults) {
+      return session.lastResults.playersSnapshot;
+    }
+    return session?.players || {};
+  }, [session?.players, session?.lastResults]);
 
   // Сортировка игроков по убыванию счёта
   const playersArr = useMemo(() => {
-    if (!session?.players) return [];
-    const arr = Object.values(session.players);
+    if (!playersForUi) return [];
+    const arr = Object.values(playersForUi);
     arr.sort((a, b) => {
       if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
       if (b.correctCount !== a.correctCount) return b.correctCount - a.correctCount;
@@ -122,7 +129,7 @@ export default function HostPage({ params }: HostPageProps) {
       return aAvg - bAvg;
     });
     return arr;
-  }, [session?.players]);
+  }, [playersForUi]);
 
   // Проверка, все ли ответили
   const allAnswered = useMemo(() => {
@@ -210,8 +217,8 @@ export default function HostPage({ params }: HostPageProps) {
     
     console.log('[HOST] slug=%s roomId=%s phase=%s', params.slug, roomId, session?.phase || 'lobby');
     
-    // Stop polling during game (question, reveal, or idle after game)
-    if (session?.phase === 'question' || session?.phase === 'reveal' || session?.currentQuestionID) return;
+    // Stop polling during game and postgame
+    if (session?.phase === 'question' || session?.phase === 'reveal' || session?.phase === 'postgamePending' || session?.currentQuestionID) return;
     
     let stopped = false;
     console.log('[HOST] Starting lobby polling for players');
@@ -232,6 +239,12 @@ export default function HostPage({ params }: HostPageProps) {
           
           // Always update session, even if players list is empty
           setSession(prev => {
+            // Не перетираем игроков после старта и в постгейме
+            if (prev && (prev.phase === 'question' || prev.phase === 'reveal' || prev.phase === 'postgamePending')) {
+              console.log('[HOST] Skipping players update - game in progress or postgame');
+              return prev;
+            }
+
             const newPlayers = playersList.reduce((acc: Record<string, PlayerScore>, p: Record<string, unknown>) => {
               const playerId = (p.id || p.playerId) as string;
               acc[playerId] = {
@@ -653,8 +666,8 @@ export default function HostPage({ params }: HostPageProps) {
                 </button>
               )}
 
-              {/* Кнопка "Начать" - только в лобби */}
-              {!session?.currentQuestionID && session?.phase !== 'question' && playersArr.length > 0 && (
+              {/* Кнопка "Начать" - только в лобби/idle */}
+              {!session?.currentQuestionID && session?.phase !== 'question' && session?.phase !== 'postgamePending' && playersArr.length > 0 && (
                 <button
                   onClick={handleStart}
                   className="px-8 py-4 bg-gradient-to-r from-yellow-400 via-pink-500 to-blue-500 text-white font-extrabold text-lg rounded-xl shadow-2xl hover:scale-105 transform transition-all"

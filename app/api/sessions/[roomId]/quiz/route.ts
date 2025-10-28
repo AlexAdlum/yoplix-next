@@ -83,15 +83,13 @@ export async function POST(
 
     console.log(`[Quiz API] POST ${action} for room ${roomId}`);
 
-    // Общая автозавершалка постгейма
+    // Автозавершение постгейма
     const s0 = await getSessionState(roomId);
-    if (s0 && s0.phase === 'postgamePending' && typeof s0.postgameAutoFinishAt === 'number' && Date.now() >= s0.postgameAutoFinishAt) {
-      const res = computeFinalResults(s0 as SessionState);
-      (s0 as SessionState).lastResults = { ...res, snapshotAt: Date.now() } as SessionState['lastResults'];
+    if (s0 && s0.phase === 'postgamePending' && s0.lastResults && typeof s0.lastResults === 'object' && 'autoFinishAt' in s0.lastResults && Date.now() >= s0.lastResults.autoFinishAt) {
       (s0 as SessionState).phase = 'idle';
       (s0 as SessionState).currentQuestionID = null;
       await saveSessionState(roomId, s0 as SessionState);
-      return NextResponse.json({ finished: true, lastResults: (s0 as SessionState).lastResults, autoFinished: true });
+      return NextResponse.json({ finished: true, lastResults: s0.lastResults, autoFinished: true });
     }
 
     // ===== START: Начать новый вопрос =====
@@ -249,22 +247,29 @@ export async function POST(
           });
           
           if (nextIndex >= state.selectedQuestions.length) {
-            // Все вопросы отвечены — включаем postgamePending окно
+            // Все вопросы отвечены — включаем postgamePending окно с snapshot
+            const now = Date.now();
+            const playersSnapshot = state.players ? JSON.parse(JSON.stringify(state.players)) : {};
             state.phase = 'postgamePending';
             state.currentQuestionID = null;
-            state.postgameRequestedAt = Date.now();
-            state.postgameAutoFinishAt = Date.now() + (15 * 60 * 1000);
+            state.answers = {};
+            state.firstCorrectPlayerId = null;
+            state.lastResults = {
+              playersSnapshot,
+              endedAt: now,
+              autoFinishAt: now + (15 * 60 * 1000),
+            };
             await saveSessionState(roomId, state);
 
-            console.log('[NEXT] All questions answered. Postgame pending started', {
+            console.log('[NEXT] All questions answered. Postgame pending started with snapshot', {
               roomId,
-              autoFinishAt: state.postgameAutoFinishAt,
+              autoFinishAt: state.lastResults?.autoFinishAt,
             });
 
             return {
               postgamePending: true,
               message: "Поздравляем! Вы ответили на все вопросы!",
-              autoFinishAt: state.postgameAutoFinishAt,
+              autoFinishAt: state.lastResults?.autoFinishAt ?? null,
               status: 200,
             };
           }
@@ -342,8 +347,6 @@ export async function POST(
       if (!state) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
       if (state.phase !== 'postgamePending') return NextResponse.json({ error: 'Not in postgamePending' }, { status: 400 });
 
-      const res = computeFinalResults(state);
-      state.lastResults = { ...res, snapshotAt: Date.now() } as SessionState['lastResults'];
       state.phase = 'idle';
       state.currentQuestionID = null;
       await saveSessionState(roomId, state);
@@ -381,11 +384,19 @@ export async function GET(
 
     if (!state || state.currentQuestionID === null) {
       // Если ждём постгейм — вернуть pending
+      // Автозавершение при GET
+      if (state?.phase === 'postgamePending' && state.lastResults && typeof state.lastResults === 'object' && 'autoFinishAt' in state.lastResults && Date.now() >= state.lastResults.autoFinishAt) {
+        (state as SessionState).phase = 'idle';
+        (state as SessionState).currentQuestionID = null;
+        await saveSessionState(roomId, state as SessionState);
+        return NextResponse.json({ finished: true, lastResults: state.lastResults, autoFinished: true });
+      }
+
       if (state?.phase === 'postgamePending') {
         return NextResponse.json({
           postgamePending: true,
           message: 'Поздравляем! Вы ответили на все вопросы!',
-          autoFinishAt: state.postgameAutoFinishAt ?? null,
+          autoFinishAt: state.lastResults && typeof state.lastResults === 'object' && 'autoFinishAt' in state.lastResults ? state.lastResults.autoFinishAt : null,
           players: state.players,
           totalQuestions: Array.isArray(state.selectedQuestions) ? state.selectedQuestions.length : 15,
           phase: state.phase,

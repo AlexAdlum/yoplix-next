@@ -67,16 +67,12 @@ export interface SessionState {
   totalQuestions: number;
   selectedQuestions: number[]; // IDs выбранных вопросов
   shuffledOptions?: string[]; // перемешанные варианты для текущего вопроса
-  // Postgame pending window
-  postgameRequestedAt?: number;     // когда хост нажал "следующий" после 15-го
-  postgameAutoFinishAt?: number;    // дедлайн авто-завершения (now + 15мин)
-  // Снимок итогов по завершению
+  // Снимок результатов с заморозкой игроков
   lastResults?: {
-    winners: string[];              // id игроков-победителей
-    fastest?: string | null;        // id самого быстрого
-    mostProductive?: string | null; // id по кол-ву верных
-    snapshotAt: number;
-  } | null;
+    playersSnapshot: Record<string, PlayerScore>; // замороженные метрики
+    endedAt: number;       // когда игроки ответили на все вопросы
+    autoFinishAt: number;  // endedAt + 15 * 60 * 1000
+  } | false; // false либо объект (нет — не показываем)
 }
 
 /**

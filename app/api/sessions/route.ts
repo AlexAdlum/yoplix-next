@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { noStore } from 'next/cache';
+import { pickRandomIds } from '@/app/lib/random';
+import { getQuestionsBySlug } from '@/app/lib/quiz';
 import { redis } from "@/app/lib/redis";
 import crypto from "crypto";
 
@@ -24,6 +27,7 @@ type SessionState = {
 
 export async function POST(req: NextRequest) {
   try {
+    noStore();
     const body = await req.json() as { slug: string; roomId?: string };
     const { slug, roomId: maybeRoomId } = body;
     
@@ -44,7 +48,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, roomId }, { status: 200 });
     }
 
-    // Создаём новую сессию
+    // Создаём новую сессию (с предвыбором вопросов)
+    // Получаем все вопросы по слагу и выбираем 15 случайных ID
+    const quizQs = await getQuestionsBySlug(slug);
+    const allIds = quizQs.map(q => q.questionID);
+    const selectedQuestionIDs = pickRandomIds(allIds, Math.min(15, allIds.length));
+
     const state: SessionState = {
       roomId,
       slug,
@@ -53,11 +62,14 @@ export async function POST(req: NextRequest) {
       currentQuestionID: null,
       players: {},
       answers: {},
+      currentQuestionIndex: -1,
+      // сохранить предвыбранные вопросы
+      selectedQuestions: selectedQuestionIDs,
     };
     
     await redis.set(key, JSON.stringify(state));
     
-    console.log('[API] New session created:', { roomId, slug });
+    console.log('[SESSIONS] created', { roomId, slug, count: selectedQuestionIDs.length });
     
     return NextResponse.json({ ok: true, roomId }, { status: 201 });
   } catch (e) {

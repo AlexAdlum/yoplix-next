@@ -3,6 +3,9 @@ import { initMechanics, getMechanics } from "@/app/lib/mechanics";
 import { redis } from "@/app/lib/redis";
 import type { SessionState, QuizQuestion } from "@/types/quiz";
 import questions from "@/app/data/questions.json";
+import { noStore } from 'next/cache';
+import { pickRandomIds } from '@/app/lib/random';
+import { getQuestionsBySlug } from '@/app/lib/quiz';
 import mechanics from "@/app/data/mechanics.json";
 
 // Инициализируем механики при загрузке модуля
@@ -77,6 +80,7 @@ export async function POST(
   { params }: { params: Promise<{ roomId: string }> }
 ) {
   try {
+    noStore();
     const { roomId } = await params;
     const body = await req.json() as Record<string, unknown>;
     const { action } = body;
@@ -95,49 +99,43 @@ export async function POST(
     // ===== START: Начать новый вопрос =====
     if (action === "start") {
       const { slug } = body as { slug: string };
-      
-      // Получаем все вопросы для данного слага
-      const quizQuestions = (questions as QuizQuestion[]).filter(q => q.Slug === slug);
-      
-      if (quizQuestions.length === 0) {
-        return NextResponse.json({ error: "No questions found for this quiz" }, { status: 404 });
+      const state0 = await getSessionState(roomId);
+      if (!state0) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+
+      // Используем уже предвыбранные вопросы; если их нет — безопасный fallback
+      let selected = (state0 as SessionState).selectedQuestions;
+      if (!selected || selected.length === 0) {
+        const quizQuestions = await getQuestionsBySlug(slug);
+        if (quizQuestions.length === 0) {
+          return NextResponse.json({ error: 'No questions found for this quiz' }, { status: 404 });
+        }
+        const allIds = quizQuestions.map(q => q.questionID);
+        selected = pickRandomIds(allIds, Math.min(15, allIds.length));
+        (state0 as SessionState).selectedQuestions = selected; // persist fallback
+        console.log('[START] fallback preselect', { roomId, first: selected[0] });
+      } else {
+        console.log('[START] using preselected questions', { roomId, first: selected[0] });
       }
 
-      // Выбираем случайные 15 вопросов
-      const shuffled = [...quizQuestions].sort(() => Math.random() - 0.5);
-      const selectedQuestions = shuffled.slice(0, Math.min(15, quizQuestions.length));
-      const selectedIds = selectedQuestions.map(q => q.questionID);
-
-      // Создаём начальное состояние сессии
       const now = Date.now();
-      const state: SessionState = {
-        roomId,
-        slug,
-        currentQuestionID: selectedIds[0],
-        currentQuestionIndex: 0,
-        phase: 'question',
-        startedAt: now,
-        questionStartedAt: now,
-        players: {},
-        answers: {},
-        firstCorrectPlayerId: null,
-        totalQuestions: selectedIds.length,
-        selectedQuestions: selectedIds,
-      };
+      (state0 as SessionState).currentQuestionIndex = 0;
+      (state0 as SessionState).currentQuestionID = selected[0];
+      (state0 as SessionState).phase = 'question';
+      (state0 as SessionState).startedAt = now;
+      (state0 as SessionState).questionStartedAt = now;
+      (state0 as SessionState).players = (state0 as SessionState).players || {};
+      (state0 as SessionState).answers = {};
+      (state0 as SessionState).firstCorrectPlayerId = null as any;
+      (state0 as SessionState).totalQuestions = selected.length as any;
 
-      // Получаем первый вопрос и подготавливаем его через механику
-      const firstQuestion = enrichQuestionWithMechanics(selectedQuestions[0]);
+      const q0 = getQuestionById(selected[0]);
+      if (!q0) return NextResponse.json({ error: 'Question not found' }, { status: 404 });
+      const firstQuestion = enrichQuestionWithMechanics(q0);
       const handler = getMechanics(firstQuestion.mechanicsType);
       const presentation = handler.presentQuestion(firstQuestion);
+      (state0 as SessionState).shuffledOptions = presentation.options as any;
 
-      // Сохраняем перемешанные варианты в состояние
-      state.shuffledOptions = presentation.options;
-      await saveSessionState(roomId, state);
-
-      console.log(`[Quiz API] Game started for room ${roomId}`);
-      console.log(`[Quiz API] First question:`, firstQuestion.question);
-      console.log(`[Quiz API] Options:`, presentation.options);
-      console.log(`[Quiz API] State saved with currentQuestionID:`, state.currentQuestionID);
+      await saveSessionState(roomId, state0 as SessionState);
 
       return NextResponse.json({
         question: {
@@ -146,7 +144,7 @@ export async function POST(
         },
         promptText: presentation.promptText,
         currentQuestion: 1,
-        totalQuestions: selectedIds.length,
+        totalQuestions: selected.length,
       });
     }
 

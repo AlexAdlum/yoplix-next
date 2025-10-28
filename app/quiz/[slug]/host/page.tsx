@@ -62,6 +62,13 @@ export default function HostPage({ params }: HostPageProps) {
   const [session, setSession] = useState<SessionState | null>(null);
   const [isNextQuestionLoading, setIsNextQuestionLoading] = useState(false);
   
+  // Диагностика фазы: лог на каждый рендер
+  console.log('[HOST UI] Rendering phase:', session?.phase);
+  // Диагностика фазы: лог при смене фазы
+  useEffect(() => {
+    console.log('[HOST] Session phase changed:', session?.phase);
+  }, [session?.phase]);
+  
   const joinUrl = useMemo(() => {
     if (!roomId) return "";
     
@@ -608,8 +615,8 @@ export default function HostPage({ params }: HostPageProps) {
 
             {/* Кнопки управления */}
             <div className="mt-6 flex justify-end gap-3">
-              {/* Во время вопроса показываем кнопку "Следующий вопрос" */}
-              {session?.phase === 'question' && session?.currentQuestionID && (
+              {/* Render Next Question button for question and reveal phases */}
+              {(session?.phase === 'reveal' || session?.phase === 'question') && (
                 <button
                   onClick={handleNext}
                   disabled={isNextQuestionLoading}

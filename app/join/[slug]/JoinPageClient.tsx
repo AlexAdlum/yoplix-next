@@ -527,9 +527,10 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
                 )}
               </div>
             ) : (
-              <div className="text-center">
+              <div className="text-center space-y-4">
                 <h2 className="text-2xl font-bold mb-2">Игра завершена!</h2>
                 <p className="text-gray-600">Спасибо за участие!</p>
+                {/* TODO: добавить отображение итогов, если они приходят в data.lastResults */}
               </div>
             )}
           </div>

@@ -39,6 +39,11 @@ type SessionState = {
     playersSnapshot: Record<string, PlayerScore>;
     endedAt: number;
     autoFinishAt: number;
+    finalResults?: {
+      winners: Array<{ id: string; nickname: string; avatarUrl: string; points: number }>;
+      fastest?: { id: string; nickname: string; avatarUrl: string; avgMs: number } | null;
+      mostProductive?: { id: string; nickname: string; avatarUrl: string; correct: number } | null;
+    };
   } | false;
 };
 
@@ -685,10 +690,49 @@ export default function HostPage({ params }: HostPageProps) {
               )}
             </div>
 
-            {/* Фаза postgamePending: сообщение и кнопка завершения */}
+            {/* Фаза postgamePending: сообщение, итоги и кнопка завершения */}
             {session?.phase === 'postgamePending' && (
-              <div className="mt-8 text-center">
-                <p className="text-xl font-semibold text-gray-800 mb-4">Поздравляем! Вы ответили на все вопросы!</p>
+              <div className="mt-8 text-center space-y-6">
+                <p className="text-xl font-semibold text-gray-800">Поздравляем! Вы ответили на все вопросы!</p>
+                
+                {/* Блок итогов */}
+                {session.lastResults && typeof session.lastResults === 'object' && session.lastResults.finalResults && (
+                  <div className="bg-white rounded-2xl shadow-xl p-6 space-y-4 text-left">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">🏆 Итоги викторины</h2>
+                    
+                    {/* Победители */}
+                    {session.lastResults.finalResults.winners.length > 0 && (
+                      <div className="text-sm">
+                        <span className="font-semibold text-gray-800">Победители — </span>
+                        {session.lastResults.finalResults.winners.map((w, i) => (
+                          <span key={w.id} className="inline-flex items-center gap-1 mr-4">
+                            <span className="font-medium">
+                              {i === 0 && '🥇 '}
+                              {w.nickname} ({w.points} баллов)
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Самый быстрый */}
+                    {session.lastResults.finalResults.fastest && (
+                      <div className="text-sm">
+                        <span className="font-semibold text-gray-800">⚡ Самый быстрый — </span>
+                        <span>{session.lastResults.finalResults.fastest.nickname} ({(session.lastResults.finalResults.fastest.avgMs / 1000).toFixed(1)} с в среднем)</span>
+                      </div>
+                    )}
+                    
+                    {/* Самый продуктивный */}
+                    {session.lastResults.finalResults.mostProductive && (
+                      <div className="text-sm">
+                        <span className="font-semibold text-gray-800">📚 Самый продуктивный — </span>
+                        <span>{session.lastResults.finalResults.mostProductive.nickname} ({session.lastResults.finalResults.mostProductive.correct} верных)</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <button
                   className="px-8 py-3 bg-emerald-600 text-white rounded-xl shadow hover:bg-emerald-700 transition"
                   onClick={handleFinish}

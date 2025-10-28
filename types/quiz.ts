@@ -72,6 +72,11 @@ export interface SessionState {
     playersSnapshot: Record<string, PlayerScore>; // замороженные метрики
     endedAt: number;       // когда игроки ответили на все вопросы
     autoFinishAt: number;  // endedAt + 15 * 60 * 1000
+    finalResults?: {
+      winners: Array<{ id: string; nickname: string; avatarUrl: string; points: number }>;
+      fastest?: { id: string; nickname: string; avatarUrl: string; avgMs: number } | null;
+      mostProductive?: { id: string; nickname: string; avatarUrl: string; correct: number } | null;
+    };
   } | false; // false либо объект (нет — не показываем)
 }
 

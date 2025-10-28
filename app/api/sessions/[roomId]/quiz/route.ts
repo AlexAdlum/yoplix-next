@@ -17,25 +17,40 @@ initMechanics();
 // Helpers for postgame results
 export const POSTGAME_WAIT_MS = 15 * 60 * 1000;
 
-function computeFinalResults(state: SessionState) {
-  const ps = Object.values(state.players ?? {});
-  if (!ps.length) return { winners: [] as string[], fastest: [] as string[], productive: [] as string[] };
+type FinalResults = {
+  winners: Array<{ id: string; nickname: string; avatarUrl: string; points: number }>;
+  fastest?: { id: string; nickname: string; avatarUrl: string; avgMs: number } | null;
+  mostProductive?: { id: string; nickname: string; avatarUrl: string; correct: number } | null;
+};
 
-  const maxPts = Math.max(...ps.map(p => p.totalPoints ?? 0));
-  const winners = ps.filter(p => (p.totalPoints ?? 0) === maxPts).map(p => p.playerId);
+function computeFinalResults(players: Record<string, PlayerScore>): FinalResults {
+  const list = Object.values(players ?? {});
+  if (!list.length) {
+    return { winners: [], fastest: null, mostProductive: null };
+  }
 
-  const withSpeed = ps.filter(p => (p.correctCount ?? 0) > 0);
-  const fastest = withSpeed
-    .sort((a, b) => (a.totalTimeCorrectMs ?? Infinity) - (b.totalTimeCorrectMs ?? Infinity))
-    .slice(0, 3)
-    .map(p => p.playerId);
+  // Winners: топ по очкам
+  list.sort((a, b) => b.totalPoints - a.totalPoints);
+  const winner = list[0] ?? null;
 
-  const maxCorr = Math.max(...ps.map(p => p.correctCount ?? 0));
-  const productive = maxCorr > 0
-    ? ps.filter(p => (p.correctCount ?? 0) === maxCorr).map(p => p.playerId)
-    : [];
+  // Fastest: минимальный avgMs среди тех, у кого correctCount > 0
+  const withCorrect = list.filter(p => (p.correctCount ?? 0) > 0);
+  const fastest = withCorrect.length
+    ? withCorrect
+        .map(p => ({ ...p, avgMs: p.totalTimeCorrectMs / p.correctCount }))
+        .sort((a, b) => a.avgMs - b.avgMs)[0]
+    : null;
 
-  return { winners, fastest, productive };
+  // Most productive: максимальный correctCount
+  const mostProductive = list.length
+    ? [...list].sort((a, b) => (b.correctCount ?? 0) - (a.correctCount ?? 0))[0]
+    : null;
+
+  return {
+    winners: winner ? [{ id: winner.playerId, nickname: winner.nickname, avatarUrl: winner.avatarUrl, points: winner.totalPoints }] : [],
+    fastest: fastest ? { id: fastest.playerId, nickname: fastest.nickname, avatarUrl: fastest.avatarUrl, avgMs: Math.round(fastest.avgMs) } : null,
+    mostProductive: mostProductive ? { id: mostProductive.playerId, nickname: mostProductive.nickname, avatarUrl: mostProductive.avatarUrl, correct: mostProductive.correctCount } : null,
+  };
 }
 
 /**
@@ -250,29 +265,34 @@ export async function POST(
           });
           
           if (nextIndex >= state.selectedQuestions.length) {
-            // Все вопросы отвечены — включаем postgamePending окно с snapshot
+            // Все вопросы отвечены — включаем postgamePending с финальными результатами
             const now = Date.now();
-            const playersSnapshot = state.players ? JSON.parse(JSON.stringify(state.players)) : {};
+            const finalResults = computeFinalResults(state.players ?? {});
+            
             state.phase = 'postgamePending';
             state.currentQuestionID = null;
             state.answers = {};
             state.firstCorrectPlayerId = null;
             state.lastResults = {
-              playersSnapshot,
+              playersSnapshot: state.players ? JSON.parse(JSON.stringify(state.players)) : {},
               endedAt: now,
               autoFinishAt: now + (15 * 60 * 1000),
-            };
+              finalResults,
+            } as unknown as SessionState['lastResults'];
+            
             await saveSessionState(roomId, state);
 
-            console.log('[NEXT] All questions answered. Postgame pending started with snapshot', {
+            console.log('[NEXT] All questions answered. Postgame pending with final results', {
               roomId,
               autoFinishAt: state.lastResults?.autoFinishAt,
+              winners: finalResults.winners.length,
             });
 
             return {
               postgamePending: true,
               message: "Поздравляем! Вы ответили на все вопросы!",
               autoFinishAt: state.lastResults?.autoFinishAt ?? null,
+              lastResults: finalResults,
               status: 200,
             };
           }
@@ -402,13 +422,15 @@ export async function GET(
       }
 
       if (state?.phase === 'postgamePending') {
+        const lastResultsObj = state.lastResults && typeof state.lastResults === 'object' ? state.lastResults : null;
         return NextResponse.json({
+          phase: state.phase,
           postgamePending: true,
           message: 'Поздравляем! Вы ответили на все вопросы!',
-          autoFinishAt: state.lastResults && typeof state.lastResults === 'object' && 'autoFinishAt' in state.lastResults ? state.lastResults.autoFinishAt : null,
+          autoFinishAt: lastResultsObj && 'autoFinishAt' in lastResultsObj ? lastResultsObj.autoFinishAt : null,
+          lastResults: lastResultsObj && 'finalResults' in lastResultsObj ? lastResultsObj.finalResults : null,
           players: state.players,
           totalQuestions: Array.isArray(state.selectedQuestions) ? state.selectedQuestions.length : 15,
-          phase: state.phase,
           currentQuestionID: null
         });
       }

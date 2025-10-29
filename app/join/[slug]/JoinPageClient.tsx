@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { getAvatarUrl } from "@/app/lib/avatar";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import type { PostgamePending } from "@/types/quiz";
 
 const avatars = [
   getAvatarUrl("Ava1"),
@@ -37,7 +38,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
   const [sessionExists, setSessionExists] = useState<boolean | null>(null);
   const [checkingSession, setCheckingSession] = useState(false);
-  const [gameState, setGameState] = useState<{ phase?: string; currentQuestionID?: number | null; postgamePending?: boolean; lastResults?: unknown } | null>(null);
+  const [gameState, setGameState] = useState<{ phase?: string; currentQuestionID?: number | null; postgamePending?: boolean; lastResults?: PostgamePending } | null>(null);
   
   // Ref to track previous question ID for change detection
   const prevQuestionIdRef = useRef<string | null>(null);
@@ -136,6 +137,44 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
       const res = await fetch(`/api/sessions/${roomId}/quiz`);
       if (res.ok) {
         const data = await res.json();
+        
+        // Обработка postgamePending: сохраняем lastResults сразу
+        if (data?.phase === 'postgamePending' && data?.lastResults && data.lastResults !== false) {
+          setGameState(prev => ({
+            ...prev,
+            phase: 'postgamePending',
+            currentQuestionID: null,
+            postgamePending: true,
+            lastResults: data.lastResults as PostgamePending,
+          }));
+          setCurrentQuestion(null);
+          setShowResult(false);
+          setIsSubmittingAnswer(false);
+          
+          if (debugEnabled) {
+            console.log('[PLAYER POSTGAME] received lastResults', {
+              hasFinal: !!data.lastResults?.finalResults,
+              autoFinishAt: data.lastResults?.autoFinishAt,
+            });
+          }
+          return; // ничего дальше не делаем в этом тике
+        }
+        
+        // Обновляем gameState для всех случаев (но не затираем lastResults если уже есть postgamePending)
+        setGameState(prev => {
+          // Если уже в postgamePending, не обнуляем lastResults
+          if (prev?.phase === 'postgamePending') {
+            return prev;
+          }
+          return {
+            ...prev,
+            phase: data.phase,
+            currentQuestionID: data.currentQuestionID,
+            postgamePending: data.postgamePending || data.phase === 'postgamePending',
+            lastResults: data.lastResults || prev?.lastResults,
+          };
+        });
+        
         if (debugEnabled) {
           console.log('[PLAYER DEBUG] received state from /quiz', {
             roomId,
@@ -145,19 +184,14 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
             finished: data.finished,
             hasLastResults: !!data.lastResults,
           });
-          setGameState({
-            phase: data.phase,
-            currentQuestionID: data.currentQuestionID,
-            postgamePending: data.postgamePending || data.phase === 'postgamePending',
-            lastResults: data.lastResults,
-          });
         }
+        
         if (data.postgamePending || data.phase === 'postgamePending') {
           // Фаза complete: показываем финальное сообщение
           setCurrentQuestion(null);
           setShowResult(false);
           setIsSubmittingAnswer(false);
-        } else if (!data.finished) {
+        } else if (!data.finished && data.question) {
           setCurrentQuestion(data.question);
         }
       }
@@ -580,16 +614,22 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
                 
                 {/* Блок итогов для игроков */}
                 {(() => {
-                  if (!gameState?.lastResults || typeof gameState.lastResults !== 'object') return null;
-                  const lr = gameState.lastResults as { finalResults?: { winners?: Array<{ id: string; nickname: string; points: number }>; fastest?: { nickname: string; timeMs: number }; mostProductive?: { nickname: string; correct: number } } };
-                  if (!lr.finalResults) return null;
-                  const fr = lr.finalResults;
+                  const showFinals =
+                    gameState?.phase === 'postgamePending' &&
+                    gameState?.lastResults &&
+                    !!gameState.lastResults.finalResults;
+                  
+                  if (!showFinals) return null;
+                  
+                  // Type narrowing: уже проверили что lastResults существует и имеет finalResults
+                  const fr = gameState.lastResults?.finalResults;
+                  if (!fr) return null;
                   return (
                     <div className="bg-white rounded-2xl shadow-xl p-6 space-y-4 text-left mt-4">
                       <h3 className="text-xl font-bold text-gray-800 mb-4">🏆 Итоги викторины</h3>
                     
                     {/* Победители */}
-                    {fr.winners && fr.winners.length > 0 && (
+                    {fr?.winners && fr.winners.length > 0 && (
                       <div className="text-sm">
                         <span className="font-semibold text-gray-800">Победители — </span>
                         {fr.winners.map((w, i) => (
@@ -636,12 +676,15 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
           <div className="mt-4 rounded-lg border border-dashed p-3 text-xs bg-white">
             <div className="font-semibold mb-1">🛠 Debug (Player)</div>
             <div className="grid grid-cols-2 gap-1">
-              <div>roomId: <code>{roomId || '—'}</code></div>
-              <div>playerId: <code>{playerId || '—'}</code></div>
               <div>phase: <code>{gameState?.phase || '—'}</code></div>
-              <div>currentQuestionID: <code>{gameState?.currentQuestionID ?? 'null'}</code></div>
-              <div>hasResults: <code>{String(!!gameState?.lastResults)}</code></div>
-              <div>isPostgamePending: <code>{String(gameState?.postgamePending || false)}</code></div>
+              <div>lastResults set: <code>{String(!!gameState?.lastResults)}</code></div>
+              <div>has final: <code>{String(gameState?.lastResults && !!gameState.lastResults.finalResults)}</code></div>
+              {gameState?.lastResults && (
+                <>
+                  <div>autoFinishAt: <code>{new Date(gameState.lastResults.autoFinishAt).toISOString()}</code></div>
+                  <div>msToAutoFinish: <code>{Math.max(0, gameState.lastResults.autoFinishAt - Date.now())}</code></div>
+                </>
+              )}
             </div>
           </div>
         )}

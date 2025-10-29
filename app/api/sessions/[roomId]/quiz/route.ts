@@ -450,11 +450,14 @@ export async function GET(
       }
 
       if (state?.phase === 'postgamePending') {
+        const lastResultsObj = isPostgamePending(state.lastResults) ? state.lastResults : null;
         return NextResponse.json({
           phase: 'postgamePending',
           currentQuestionID: null,
           players: state.players ?? {},
-          lastResults: state.lastResults ?? null,
+          lastResults: lastResultsObj,
+          autoFinishAt: lastResultsObj ? lastResultsObj.autoFinishAt : null,
+          msToAutoFinish: lastResultsObj ? Math.max(0, lastResultsObj.autoFinishAt - Date.now()) : null,
         });
       }
 

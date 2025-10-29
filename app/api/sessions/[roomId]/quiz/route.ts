@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initMechanics, getMechanics } from "@/app/lib/mechanics";
 import { redis } from "@/app/lib/redis";
-import type { SessionState, QuizQuestion } from "@/types/quiz";
+import type { SessionState, QuizQuestion, PlayerScore } from "@/types/quiz";
 import questions from "@/app/data/questions.json";
 import { pickRandomIds } from '@/app/lib/random';
 import { getQuestionsBySlug } from '@/app/lib/quiz';

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { initMechanics, getMechanics } from "@/app/lib/mechanics";
 import { redis } from "@/app/lib/redis";
-import type { SessionState, QuizQuestion, PlayerScore } from "@/types/quiz";
+import type { SessionState, QuizQuestion, PlayerScore, PostgamePending, FinalResults } from "@/types/quiz";
 import questions from "@/app/data/questions.json";
 import { pickRandomIds } from '@/app/lib/random';
 import { getQuestionsBySlug } from '@/app/lib/quiz';
@@ -17,16 +17,10 @@ initMechanics();
 // Helpers for postgame results
 export const POSTGAME_WAIT_MS = 15 * 60 * 1000;
 
-type FinalResults = {
-  winners: Array<{ id: string; nickname: string; avatarUrl: string; points: number }>;
-  fastest?: { id: string; nickname: string; avatarUrl: string; avgMs: number } | null;
-  mostProductive?: { id: string; nickname: string; avatarUrl: string; correct: number } | null;
-};
-
 function computeFinalResults(players: Record<string, PlayerScore>): FinalResults {
   const list = Object.values(players ?? {});
   if (!list.length) {
-    return { winners: [], fastest: null, mostProductive: null };
+    return { winners: [] };
   }
 
   // Winners: топ по очкам
@@ -46,11 +40,21 @@ function computeFinalResults(players: Record<string, PlayerScore>): FinalResults
     ? [...list].sort((a, b) => (b.correctCount ?? 0) - (a.correctCount ?? 0))[0]
     : null;
 
-  return {
+  const result: FinalResults = {
     winners: winner ? [{ id: winner.playerId, nickname: winner.nickname, avatarUrl: winner.avatarUrl, points: winner.totalPoints }] : [],
-    fastest: fastest ? { id: fastest.playerId, nickname: fastest.nickname, avatarUrl: fastest.avatarUrl, avgMs: Math.round(fastest.avgMs) } : null,
-    mostProductive: mostProductive ? { id: mostProductive.playerId, nickname: mostProductive.nickname, avatarUrl: mostProductive.avatarUrl, correct: mostProductive.correctCount } : null,
   };
+  if (fastest) {
+    result.fastest = { id: fastest.playerId, nickname: fastest.nickname, avatarUrl: fastest.avatarUrl, timeMs: Math.round(fastest.avgMs) };
+  }
+  if (mostProductive) {
+    result.mostProductive = { id: mostProductive.playerId, nickname: mostProductive.nickname, avatarUrl: mostProductive.avatarUrl, correct: mostProductive.correctCount };
+  }
+  return result;
+}
+
+// Type guard for lastResults narrowing
+function isPostgamePending(lr: SessionState['lastResults']): lr is PostgamePending {
+  return Boolean(lr) && lr !== false;
 }
 
 /**
@@ -109,7 +113,7 @@ export async function POST(
 
     // Автозавершение постгейма
     const s0 = await getSessionState(roomId);
-    if (s0 && s0.phase === 'postgamePending' && s0.lastResults && typeof s0.lastResults === 'object' && 'autoFinishAt' in s0.lastResults && Date.now() >= s0.lastResults.autoFinishAt) {
+    if (s0 && s0.phase === 'postgamePending' && isPostgamePending(s0.lastResults) && Date.now() >= s0.lastResults.autoFinishAt) {
       (s0 as SessionState).phase = 'idle';
       (s0 as SessionState).currentQuestionID = null;
       await saveSessionState(roomId, s0 as SessionState);
@@ -276,22 +280,25 @@ export async function POST(
             state.lastResults = {
               playersSnapshot: state.players ? JSON.parse(JSON.stringify(state.players)) : {},
               endedAt: now,
-              autoFinishAt: now + (15 * 60 * 1000),
+              autoFinishAt: now + POSTGAME_WAIT_MS,
               finalResults,
-            } as unknown as SessionState['lastResults'];
+            };
             
             await saveSessionState(roomId, state);
 
+            const autoFinishAt = isPostgamePending(state.lastResults)
+              ? state.lastResults.autoFinishAt
+              : undefined;
             console.log('[NEXT] All questions answered. Postgame pending with final results', {
               roomId,
-              autoFinishAt: state.lastResults?.autoFinishAt,
+              autoFinishAt,
               winners: finalResults.winners.length,
             });
 
             return {
               postgamePending: true,
               message: "Поздравляем! Вы ответили на все вопросы!",
-              autoFinishAt: state.lastResults?.autoFinishAt ?? null,
+              autoFinishAt: isPostgamePending(state.lastResults) ? state.lastResults.autoFinishAt : null,
               lastResults: finalResults,
               status: 200,
             };
@@ -370,7 +377,7 @@ export async function POST(
       if (!state) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
       if (state.phase !== 'postgamePending') return NextResponse.json({ error: 'Not in postgamePending' }, { status: 400 });
 
-      const results = computeFinalResults(state);
+      const results = computeFinalResults(state.players ?? {});
       state.lastResults = {
         playersSnapshot: state.players,
         endedAt: Date.now(),
@@ -414,7 +421,7 @@ export async function GET(
     if (!state || state.currentQuestionID === null) {
       // Если ждём постгейм — вернуть pending
       // Автозавершение при GET
-      if (state?.phase === 'postgamePending' && state.lastResults && typeof state.lastResults === 'object' && 'autoFinishAt' in state.lastResults && Date.now() >= state.lastResults.autoFinishAt) {
+      if (state?.phase === 'postgamePending' && isPostgamePending(state.lastResults) && Date.now() >= state.lastResults.autoFinishAt) {
         (state as SessionState).phase = 'idle';
         (state as SessionState).currentQuestionID = null;
         await saveSessionState(roomId, state as SessionState);
@@ -422,13 +429,13 @@ export async function GET(
       }
 
       if (state?.phase === 'postgamePending') {
-        const lastResultsObj = state.lastResults && typeof state.lastResults === 'object' ? state.lastResults : null;
+        const lastResultsObj = isPostgamePending(state.lastResults) ? state.lastResults : null;
         return NextResponse.json({
           phase: state.phase,
           postgamePending: true,
           message: 'Поздравляем! Вы ответили на все вопросы!',
-          autoFinishAt: lastResultsObj && 'autoFinishAt' in lastResultsObj ? lastResultsObj.autoFinishAt : null,
-          lastResults: lastResultsObj && 'finalResults' in lastResultsObj ? lastResultsObj.finalResults : null,
+          autoFinishAt: lastResultsObj ? lastResultsObj.autoFinishAt : null,
+          lastResults: lastResultsObj ? lastResultsObj.finalResults ?? null : null,
           players: state.players,
           totalQuestions: Array.isArray(state.selectedQuestions) ? state.selectedQuestions.length : 15,
           currentQuestionID: null

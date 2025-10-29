@@ -37,6 +37,25 @@ export interface PlayerScore {
 }
 
 /**
+ * Финальные результаты постгейма
+ */
+export type FinalResults = {
+  winners: Array<{ id: string; nickname: string; avatarUrl: string; points: number }>;
+  fastest?: { id: string; nickname: string; avatarUrl: string; timeMs: number };
+  mostProductive?: { id: string; nickname: string; avatarUrl: string; correct: number };
+};
+
+/**
+ * Снимок состояния после завершения вопросов, ожидаем автозавершение постгейма
+ */
+export type PostgamePending = {
+  playersSnapshot: Record<string, PlayerScore>;
+  endedAt: number;
+  autoFinishAt: number;
+  finalResults?: FinalResults;
+};
+
+/**
  * Ответ игрока на вопрос
  */
 export interface PlayerAnswer {
@@ -67,17 +86,8 @@ export interface SessionState {
   totalQuestions: number;
   selectedQuestions: number[]; // IDs выбранных вопросов
   shuffledOptions?: string[]; // перемешанные варианты для текущего вопроса
-  // Снимок результатов с заморозкой игроков
-  lastResults?: {
-    playersSnapshot: Record<string, PlayerScore>; // замороженные метрики
-    endedAt: number;       // когда игроки ответили на все вопросы
-    autoFinishAt: number;  // endedAt + 15 * 60 * 1000
-    finalResults?: {
-      winners: Array<{ id: string; nickname: string; avatarUrl: string; points: number }>;
-      fastest?: { id: string; nickname: string; avatarUrl: string; avgMs: number } | null;
-      mostProductive?: { id: string; nickname: string; avatarUrl: string; correct: number } | null;
-    };
-  } | false; // false либо объект (нет — не показываем)
+  // Снимок результатов с заморозкой игроков; false — ещё нет
+  lastResults: false | PostgamePending;
 }
 
 /**

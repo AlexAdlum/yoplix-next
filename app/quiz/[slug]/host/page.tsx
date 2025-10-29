@@ -483,11 +483,17 @@ export default function HostPage({ params }: HostPageProps) {
                   options: data.question.answers || [],
                   comment: data.comment,
                 } : prev.currentQuestion,
+                lastResults: data.lastResults ?? prev.lastResults,
               };
             });
           } else {
-            // Викторина завершена
-            setSession(prev => prev ? { ...prev, phase: 'idle', currentQuestionID: null } : null);
+            // Викторина завершена или postgame pending
+            if (data.postgamePending && data.lastResults) {
+              // Обновляем состояние для postgamePending
+              setSession(prev => prev ? { ...prev, phase: 'postgamePending', currentQuestionID: null, lastResults: data.lastResults } : null);
+            } else {
+              setSession(prev => prev ? { ...prev, phase: 'idle', currentQuestionID: null } : null);
+            }
           }
         }
       } catch (error) {
@@ -587,7 +593,9 @@ export default function HostPage({ params }: HostPageProps) {
       
       if (res.ok) {
         const data = await res.json();
-        if (data.finished) {
+        if (data.postgamePending && data.lastResults) {
+          setSession(prev => prev ? { ...prev, phase: 'postgamePending', currentQuestionID: null, lastResults: data.lastResults } : null);
+        } else if (data.finished) {
           setSession(prev => prev ? { ...prev, phase: 'idle', currentQuestionID: null } : null);
         }
       } else if (res.status === 429) {
@@ -753,13 +761,10 @@ export default function HostPage({ params }: HostPageProps) {
               <div className="mt-6 rounded-xl border border-dashed p-4 text-sm bg-white">
                 <div className="font-semibold mb-2">🛠 Debug (Host)</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div>roomId: <code>{roomId || '—'}</code></div>
                   <div>phase: <code>{session?.phase || '—'}</code></div>
-                  <div>currentQuestionID: <code>{session?.currentQuestionID ?? 'null'}</code></div>
-                  <div>players: <code>{session?.players ? Object.keys(session.players).length : 0}</code></div>
-                  <div>answers: <code>{session?.answers ? Object.keys(session.answers).length : 0}</code></div>
-                  <div>lastResults set: <code>{String(!!session?.lastResults)}</code></div>
-                  <div>isPostgamePending: <code>{String(isPostgamePending(session?.lastResults))}</code></div>
+                  <div>players: <code>{Object.keys(session?.players ?? {}).length}</code></div>
+                  <div>lastResults set: <code>{String(Boolean(session?.lastResults))}</code></div>
+                  <div>isPostgamePending: <code>{String(session?.phase === 'postgamePending')}</code></div>
                   {postgame && (
                     <>
                       <div>endedAt: <code>{new Date(postgame.endedAt).toISOString()}</code></div>
@@ -809,15 +814,15 @@ export default function HostPage({ params }: HostPageProps) {
                 <p className="text-xl font-semibold text-gray-800">Поздравляем! Вы ответили на все вопросы!</p>
                 
                 {/* Блок итогов */}
-                {hasFinal && session?.lastResults && isPostgamePending(session.lastResults) && session.lastResults.finalResults && (
+                {session?.lastResults && isPostgamePending(session.lastResults) && session.lastResults.finalResults && (
                   <div className="bg-white rounded-2xl shadow-xl p-6 space-y-4 text-left">
                     <h2 className="text-2xl font-bold text-gray-800 mb-4">🏆 Итоги викторины</h2>
                     
                     {/* Победители */}
-                    {session.lastResults.finalResults!.winners.length > 0 && (
+                    {session.lastResults.finalResults.winners && session.lastResults.finalResults.winners.length > 0 && (
                       <div className="text-sm">
                         <span className="font-semibold text-gray-800">Победители — </span>
-                        {session.lastResults.finalResults!.winners.map((w, i) => (
+                        {session.lastResults.finalResults.winners.map((w, i) => (
                           <span key={w.id} className="inline-flex items-center gap-1 mr-4">
                             <span className="font-medium">
                               {i === 0 && '🥇 '}
@@ -829,18 +834,18 @@ export default function HostPage({ params }: HostPageProps) {
                     )}
                     
                     {/* Самый быстрый */}
-                    {session.lastResults.finalResults!.fastest && (
+                    {session.lastResults.finalResults.fastest && (
                       <div className="text-sm">
                         <span className="font-semibold text-gray-800">⚡ Самый быстрый — </span>
-                        <span>{session.lastResults.finalResults!.fastest!.nickname} ({((session.lastResults.finalResults!.fastest!.timeMs / 1000).toFixed(1))} с в среднем)</span>
+                        <span>{session.lastResults.finalResults.fastest.nickname} ({((session.lastResults.finalResults.fastest.timeMs / 1000).toFixed(1))} с в среднем)</span>
                       </div>
                     )}
                     
                     {/* Самый продуктивный */}
-                    {session.lastResults.finalResults!.mostProductive && (
+                    {session.lastResults.finalResults.mostProductive && (
                       <div className="text-sm">
                         <span className="font-semibold text-gray-800">📚 Самый продуктивный — </span>
-                        <span>{session.lastResults.finalResults!.mostProductive!.nickname} ({session.lastResults.finalResults!.mostProductive!.correct} верных)</span>
+                        <span>{session.lastResults.finalResults.mostProductive.nickname} ({session.lastResults.finalResults.mostProductive.correct} верных)</span>
                       </div>
                     )}
                   </div>

@@ -289,15 +289,14 @@ export async function POST(
           
           if (isLastQuestion) {
             // Все вопросы отвечены — включаем postgamePending с финальными результатами
+            const playersSnapshot = state.players ?? {};
+            const finalResults = computeFinalResults(playersSnapshot);
             const now = Date.now();
-            const finalResults = computeFinalResults(state.players ?? {});
-            
+
             state.phase = 'postgamePending';
             state.currentQuestionID = null;
-            state.answers = {};
-            state.firstCorrectPlayerId = null;
             state.lastResults = {
-              playersSnapshot: state.players ?? {},
+              playersSnapshot,
               endedAt: now,
               autoFinishAt: now + POSTGAME_WAIT_MS,
               finalResults,
@@ -312,13 +311,11 @@ export async function POST(
               mostProductive: !!finalResults.mostProductive,
             });
 
-            return {
+            return NextResponse.json({
+              finished: true,
               postgamePending: true,
-              message: "Поздравляем! Вы ответили на все вопросы!",
-              autoFinishAt: isPostgamePending(state.lastResults) ? state.lastResults.autoFinishAt : null,
-              lastResults: finalResults,
-              status: 200,
-            };
+              lastResults: state.lastResults,
+            });
           }
 
           // Переходим к следующему вопросу
@@ -453,16 +450,11 @@ export async function GET(
       }
 
       if (state?.phase === 'postgamePending') {
-        const lastResultsObj = isPostgamePending(state.lastResults) ? state.lastResults : null;
         return NextResponse.json({
-          phase: state.phase,
-          postgamePending: true,
-          message: 'Поздравляем! Вы ответили на все вопросы!',
-          autoFinishAt: lastResultsObj ? lastResultsObj.autoFinishAt : null,
-          lastResults: lastResultsObj ? lastResultsObj.finalResults ?? null : null,
-          players: state.players,
-          totalQuestions: Array.isArray(state.selectedQuestions) ? state.selectedQuestions.length : 15,
-          currentQuestionID: null
+          phase: 'postgamePending',
+          currentQuestionID: null,
+          players: state.players ?? {},
+          lastResults: state.lastResults ?? null,
         });
       }
 

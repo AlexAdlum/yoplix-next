@@ -148,7 +148,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
           setGameState({
             phase: data.phase,
             currentQuestionID: data.currentQuestionID,
-            postgamePending: data.postgamePending,
+            postgamePending: data.postgamePending || data.phase === 'postgamePending',
             lastResults: data.lastResults,
           });
         }
@@ -580,13 +580,13 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
                 
                 {/* Блок итогов для игроков */}
                 {(() => {
-                  if (!hasFinal || !gameState?.lastResults || gameState.lastResults === false) return null;
+                  if (!gameState?.lastResults || typeof gameState.lastResults !== 'object') return null;
                   const lr = gameState.lastResults as { finalResults?: { winners?: Array<{ id: string; nickname: string; points: number }>; fastest?: { nickname: string; timeMs: number }; mostProductive?: { nickname: string; correct: number } } };
                   if (!lr.finalResults) return null;
                   const fr = lr.finalResults;
                   return (
-                  <div className="bg-white rounded-2xl shadow-xl p-6 space-y-4 text-left mt-4">
-                    <h3 className="text-xl font-bold text-gray-800 mb-4">🏆 Итоги викторины</h3>
+                    <div className="bg-white rounded-2xl shadow-xl p-6 space-y-4 text-left mt-4">
+                      <h3 className="text-xl font-bold text-gray-800 mb-4">🏆 Итоги викторины</h3>
                     
                     {/* Победители */}
                     {fr.winners && fr.winners.length > 0 && (

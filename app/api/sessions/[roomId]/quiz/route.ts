@@ -305,20 +305,12 @@ export async function POST(
             
             await saveSessionState(roomId, state);
 
-            console.log('[Quiz API DEBUG] next → LAST QUESTION, setting lastResults', {
+            console.log('[NEXT] Enter postgamePending', {
               roomId,
-              endedAt: now,
-              autoFinishAt: now + POSTGAME_WAIT_MS,
-              winnersCount: finalResults.winners.length,
-            });
-
-            const autoFinishAt = isPostgamePending(state.lastResults)
-              ? state.lastResults.autoFinishAt
-              : undefined;
-            console.log('[NEXT] All questions answered. Postgame pending with final results', {
-              roomId,
-              autoFinishAt,
               winners: finalResults.winners.length,
+              fastest: !!finalResults.fastest,
+              mostProductive: !!finalResults.mostProductive,
+              autoFinishAt: state.lastResults.autoFinishAt,
             });
 
             return {

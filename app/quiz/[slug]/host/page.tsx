@@ -20,6 +20,18 @@ type PostgamePending = {
   };
 };
 
+// UI guards: check phase instead of lastResults type
+const isPostgamePendingPhase = (s?: SessionState | null) =>
+  s?.phase === 'postgamePending';
+
+const hasFinalResults = (s?: SessionState | null) => {
+  if (!s?.lastResults) return false;
+  const lr = s.lastResults as false | PostgamePending | undefined;
+  if (lr === false || !isPostgamePending(lr)) return false;
+  return !!(lr.finalResults);
+};
+
+// Legacy type guard for lastResults object (for compatibility)
 function isPostgamePending(x: unknown): x is PostgamePending {
   if (!x || typeof x !== 'object') return false;
   const r = x as Record<string, unknown>;
@@ -53,16 +65,7 @@ type SessionState = {
     options: string[];
     comment?: string | null;
   };
-  lastResults?: {
-    playersSnapshot: Record<string, PlayerScore>;
-    endedAt: number;
-    autoFinishAt: number;
-    finalResults?: {
-      winners: Array<{ id: string; nickname: string; avatarUrl: string; points: number }>;
-      fastest?: { id: string; nickname: string; avatarUrl: string; avgMs: number } | null;
-      mostProductive?: { id: string; nickname: string; avatarUrl: string; correct: number } | null;
-    };
-  } | false;
+  lastResults?: false | PostgamePending;
 };
 
 // Утилиты форматирования
@@ -101,6 +104,10 @@ export default function HostPage({ params }: HostPageProps) {
   const postgame = isPostgamePending(lastResults) ? lastResults : null;
   const now = Date.now();
   const msToAutoFinish = postgame ? Math.max(0, postgame.autoFinishAt - now) : null;
+  
+  // UI convenience helpers
+  const isInPostgame = isPostgamePendingPhase(session);
+  const hasFinal = hasFinalResults(session);
   
   // Optional client-side navigation
   // const router = useRouter();
@@ -155,7 +162,14 @@ export default function HostPage({ params }: HostPageProps) {
           }
         : null,
     });
-  }, [debugEnabled, session, roomId]);
+    if (isInPostgame) {
+      console.log('[HOST UI] Rendering postgame', {
+        phase: session.phase,
+        hasFinal,
+        lrType: typeof (session.lastResults),
+      });
+    }
+  }, [debugEnabled, session, roomId, isInPostgame, hasFinal]);
 
   // Debug notification when postgame is detected
   useEffect(() => {
@@ -765,8 +779,8 @@ export default function HostPage({ params }: HostPageProps) {
 
             {/* Кнопки управления */}
             <div className="mt-6 flex justify-end gap-3">
-              {/* Render Next Question button for question and reveal phases */}
-              {(session?.phase === 'reveal' || session?.phase === 'question') && (
+              {/* Render Next Question button for question and reveal phases - hide in postgame */}
+              {!isInPostgame && (session?.phase === 'reveal' || session?.phase === 'question') && (
                 <button
                   onClick={handleNext}
                   disabled={isNextQuestionLoading}
@@ -778,8 +792,8 @@ export default function HostPage({ params }: HostPageProps) {
                 </button>
               )}
 
-              {/* Кнопка "Начать" - только в лобби/idle */}
-              {!session?.currentQuestionID && session?.phase !== 'question' && session?.phase !== 'postgamePending' && playersArr.length > 0 && (
+              {/* Кнопка "Начать" - только в лобби/idle, hide in postgame */}
+              {!isInPostgame && !session?.currentQuestionID && session?.phase !== 'question' && playersArr.length > 0 && (
                 <button
                   onClick={handleStart}
                   className="px-8 py-4 bg-gradient-to-r from-yellow-400 via-pink-500 to-blue-500 text-white font-extrabold text-lg rounded-xl shadow-2xl hover:scale-105 transform transition-all"
@@ -790,20 +804,20 @@ export default function HostPage({ params }: HostPageProps) {
             </div>
 
             {/* Фаза postgamePending: сообщение, итоги и кнопка завершения */}
-            {session?.phase === 'postgamePending' && (
+            {isInPostgame && (
               <div className="mt-8 text-center space-y-6">
                 <p className="text-xl font-semibold text-gray-800">Поздравляем! Вы ответили на все вопросы!</p>
                 
                 {/* Блок итогов */}
-                {session.lastResults && typeof session.lastResults === 'object' && session.lastResults.finalResults && (
+                {hasFinal && session?.lastResults && isPostgamePending(session.lastResults) && session.lastResults.finalResults && (
                   <div className="bg-white rounded-2xl shadow-xl p-6 space-y-4 text-left">
                     <h2 className="text-2xl font-bold text-gray-800 mb-4">🏆 Итоги викторины</h2>
                     
                     {/* Победители */}
-                    {session.lastResults.finalResults.winners.length > 0 && (
+                    {session.lastResults.finalResults!.winners.length > 0 && (
                       <div className="text-sm">
                         <span className="font-semibold text-gray-800">Победители — </span>
-                        {session.lastResults.finalResults.winners.map((w, i) => (
+                        {session.lastResults.finalResults!.winners.map((w, i) => (
                           <span key={w.id} className="inline-flex items-center gap-1 mr-4">
                             <span className="font-medium">
                               {i === 0 && '🥇 '}
@@ -815,18 +829,18 @@ export default function HostPage({ params }: HostPageProps) {
                     )}
                     
                     {/* Самый быстрый */}
-                    {session.lastResults.finalResults.fastest && (
+                    {session.lastResults.finalResults!.fastest && (
                       <div className="text-sm">
                         <span className="font-semibold text-gray-800">⚡ Самый быстрый — </span>
-                        <span>{session.lastResults.finalResults.fastest.nickname} ({(session.lastResults.finalResults.fastest.avgMs / 1000).toFixed(1)} с в среднем)</span>
+                        <span>{session.lastResults.finalResults!.fastest!.nickname} ({((session.lastResults.finalResults!.fastest!.timeMs / 1000).toFixed(1))} с в среднем)</span>
                       </div>
                     )}
                     
                     {/* Самый продуктивный */}
-                    {session.lastResults.finalResults.mostProductive && (
+                    {session.lastResults.finalResults!.mostProductive && (
                       <div className="text-sm">
                         <span className="font-semibold text-gray-800">📚 Самый продуктивный — </span>
-                        <span>{session.lastResults.finalResults.mostProductive.nickname} ({session.lastResults.finalResults.mostProductive.correct} верных)</span>
+                        <span>{session.lastResults.finalResults!.mostProductive!.nickname} ({session.lastResults.finalResults!.mostProductive!.correct} верных)</span>
                       </div>
                     )}
                   </div>

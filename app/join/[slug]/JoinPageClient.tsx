@@ -47,6 +47,20 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
     (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1') ||
     process.env.NEXT_PUBLIC_DEBUG_HOST === '1';
 
+  // UI guards for postgame
+  const isPostgamePendingPhase = (s?: { phase?: string } | null) =>
+    s?.phase === 'postgamePending';
+
+  const hasFinalResults = (s?: { lastResults?: unknown } | null) => {
+    if (!s?.lastResults) return false;
+    if (s.lastResults === false) return false;
+    const lr = s.lastResults as Record<string, unknown>;
+    return !!(lr.finalResults);
+  };
+
+  const isInPostgame = isPostgamePendingPhase(gameState);
+  const hasFinal = hasFinalResults(gameState);
+
   const channelName = useMemo(() => `yoplix-join-${slug}`, [slug]);
 
   // Read roomId from query
@@ -138,7 +152,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
             lastResults: data.lastResults,
           });
         }
-        if (data.postgamePending) {
+        if (data.postgamePending || data.phase === 'postgamePending') {
           // Фаза complete: показываем финальное сообщение
           setCurrentQuestion(null);
           setShowResult(false);
@@ -559,11 +573,59 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
                   </div>
                 )}
               </div>
+            ) : isInPostgame ? (
+              <div className="text-center space-y-4">
+                <h2 className="text-2xl font-bold mb-2">Поздравляем! Вы ответили на все вопросы!</h2>
+                <p className="text-gray-600">Спасибо за участие!</p>
+                
+                {/* Блок итогов для игроков */}
+                {(() => {
+                  if (!hasFinal || !gameState?.lastResults || gameState.lastResults === false) return null;
+                  const lr = gameState.lastResults as { finalResults?: { winners?: Array<{ id: string; nickname: string; points: number }>; fastest?: { nickname: string; timeMs: number }; mostProductive?: { nickname: string; correct: number } } };
+                  if (!lr.finalResults) return null;
+                  const fr = lr.finalResults;
+                  return (
+                  <div className="bg-white rounded-2xl shadow-xl p-6 space-y-4 text-left mt-4">
+                    <h3 className="text-xl font-bold text-gray-800 mb-4">🏆 Итоги викторины</h3>
+                    
+                    {/* Победители */}
+                    {fr.winners && fr.winners.length > 0 && (
+                      <div className="text-sm">
+                        <span className="font-semibold text-gray-800">Победители — </span>
+                        {fr.winners.map((w, i) => (
+                          <span key={w.id} className="inline-flex items-center gap-1 mr-4">
+                            <span className="font-medium">
+                              {i === 0 && '🥇 '}
+                              {w.nickname} ({w.points} баллов)
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Самый быстрый */}
+                    {fr.fastest && (
+                      <div className="text-sm">
+                        <span className="font-semibold text-gray-800">⚡ Самый быстрый — </span>
+                        <span>{fr.fastest.nickname} ({(fr.fastest.timeMs / 1000).toFixed(1)} с в среднем)</span>
+                      </div>
+                    )}
+                    
+                    {/* Самый продуктивный */}
+                    {fr.mostProductive && (
+                      <div className="text-sm">
+                        <span className="font-semibold text-gray-800">📚 Самый продуктивный — </span>
+                        <span>{fr.mostProductive.nickname} ({fr.mostProductive.correct} верных)</span>
+                      </div>
+                    )}
+                  </div>
+                  );
+                })()}
+              </div>
             ) : (
               <div className="text-center space-y-4">
                 <h2 className="text-2xl font-bold mb-2">Игра завершена!</h2>
                 <p className="text-gray-600">Спасибо за участие!</p>
-                {/* TODO: добавить отображение итогов, если они приходят в data.lastResults */}
               </div>
             )}
           </div>

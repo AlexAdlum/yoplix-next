@@ -23,7 +23,7 @@ type PostgamePending = {
 function isPostgamePending(x: unknown): x is PostgamePending {
   if (!x || typeof x !== 'object') return false;
   const r = x as Record<string, unknown>;
-  return r.playersSnapshot && typeof r.endedAt === 'number' && typeof r.autoFinishAt === 'number';
+  return Boolean(r.playersSnapshot && typeof r.endedAt === 'number' && typeof r.autoFinishAt === 'number');
 }
 
 type PlayerScore = {

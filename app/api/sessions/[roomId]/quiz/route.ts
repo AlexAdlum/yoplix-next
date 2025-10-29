@@ -297,7 +297,7 @@ export async function POST(
             state.answers = {};
             state.firstCorrectPlayerId = null;
             state.lastResults = {
-              playersSnapshot: state.players ? JSON.parse(JSON.stringify(state.players)) : {},
+              playersSnapshot: state.players ?? {},
               endedAt: now,
               autoFinishAt: now + POSTGAME_WAIT_MS,
               finalResults,
@@ -305,12 +305,11 @@ export async function POST(
             
             await saveSessionState(roomId, state);
 
-            console.log('[NEXT] Enter postgamePending', {
+            console.log('[QUIZ API] Set postgamePending with lastResults', {
               roomId,
               winners: finalResults.winners.length,
               fastest: !!finalResults.fastest,
               mostProductive: !!finalResults.mostProductive,
-              autoFinishAt: state.lastResults.autoFinishAt,
             });
 
             return {

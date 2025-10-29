@@ -749,38 +749,6 @@ export default function HostPage({ params }: HostPageProps) {
               </div>
             )}
 
-            {/* Debug banner when postgame pending */}
-            {debugEnabled && postgame && (
-              <div className="mt-4 rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-yellow-900">
-                Debug: postgame pending. Авто-завершение через ~{Math.ceil((msToAutoFinish ?? 0) / 1000)}s
-              </div>
-            )}
-
-            {/* Debug panel */}
-            {debugEnabled && (
-              <div className="mt-6 rounded-xl border border-dashed p-4 text-sm bg-white">
-                <div className="font-semibold mb-2">🛠 Debug (Host)</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div>phase: <code>{session?.phase || '—'}</code></div>
-                  <div>players: <code>{Object.keys(session?.players ?? {}).length}</code></div>
-                  <div>lastResults set: <code>{String(Boolean(session?.lastResults))}</code></div>
-                  <div>isPostgamePending: <code>{String(session?.phase === 'postgamePending')}</code></div>
-                  {postgame && (
-                    <>
-                      <div>endedAt: <code>{new Date(postgame.endedAt).toISOString()}</code></div>
-                      <div>autoFinishAt: <code>{new Date(postgame.autoFinishAt).toISOString()}</code></div>
-                      <div>msToAutoFinish: <code>{msToAutoFinish}</code></div>
-                      <div>winners: <code>{postgame.finalResults?.winners?.length ?? 0}</code></div>
-                      <div>fastest: <code>{postgame.finalResults?.fastest ? 'yes' : 'no'}</code></div>
-                      <div>mostProductive: <code>{postgame.finalResults?.mostProductive ? 'yes' : 'no'}</code></div>
-                    </>
-                  )}
-                </div>
-                {postgame?.finalResults?.winners?.length ? (
-                  <pre className="mt-2 max-h-48 overflow-auto">{JSON.stringify(postgame.finalResults, null, 2)}</pre>
-                ) : null}
-              </div>
-            )}
 
             {/* Кнопки управления */}
             <div className="mt-6 flex justify-end gap-3">

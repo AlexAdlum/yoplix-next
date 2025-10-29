@@ -671,23 +671,6 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
           </div>
         )}
 
-        {/* Debug panel */}
-        {debugEnabled && (
-          <div className="mt-4 rounded-lg border border-dashed p-3 text-xs bg-white">
-            <div className="font-semibold mb-1">🛠 Debug (Player)</div>
-            <div className="grid grid-cols-2 gap-1">
-              <div>phase: <code>{gameState?.phase || '—'}</code></div>
-              <div>lastResults set: <code>{String(!!gameState?.lastResults)}</code></div>
-              <div>has final: <code>{String(gameState?.lastResults && !!gameState.lastResults.finalResults)}</code></div>
-              {gameState?.lastResults && (
-                <>
-                  <div>autoFinishAt: <code>{new Date(gameState.lastResults.autoFinishAt).toISOString()}</code></div>
-                  <div>msToAutoFinish: <code>{Math.max(0, gameState.lastResults.autoFinishAt - Date.now())}</code></div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );

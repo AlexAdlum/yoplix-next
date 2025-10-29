@@ -109,6 +109,22 @@ export default function HostPage({ params }: HostPageProps) {
   const isInPostgame = isPostgamePendingPhase(session);
   const hasFinal = hasFinalResults(session);
   
+  // Показываем превью вопроса ведущему, когда вопрос идёт или открыт ответ
+  const showHostQuestion =
+    !!session &&
+    (session.phase === 'question' || session.phase === 'reveal') &&
+    !!session.currentQuestion;
+
+  // Берём объект текущего вопроса
+  const hostQ = session?.currentQuestion as
+    | { question?: string; promptText?: string; options?: string[]; questionID?: number }
+    | undefined;
+
+  // Нормализуем список опций (на случай, если options не пришёл по какой-то причине)
+  const hostOptions: string[] = Array.isArray(hostQ?.options)
+    ? hostQ!.options
+    : [];
+  
   // Optional client-side navigation
   // const router = useRouter();
   
@@ -648,6 +664,40 @@ export default function HostPage({ params }: HostPageProps) {
           <pre className="text-xs opacity-60 bg-gray-100 p-2 rounded mb-4">
             [HOST] roomId: {roomId} | players: {Object.keys(session?.players || {}).length} | phase: {session?.phase || 'lobby'}
           </pre>
+        )}
+
+        {/* Текущий вопрос */}
+        {showHostQuestion && (
+          <div className="rounded-2xl bg-white shadow-sm border border-[#eee] p-6 mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">Текущий вопрос</h3>
+              {typeof hostQ?.questionID === 'number' && (
+                <span className="text-sm text-gray-500">ID: {hostQ.questionID}</span>
+              )}
+            </div>
+
+            {hostQ?.promptText && (
+              <div className="text-sm text-gray-600 mb-2">{hostQ.promptText}</div>
+            )}
+
+            <div className="text-base font-medium mb-4">
+              {hostQ?.question ?? '—'}
+            </div>
+
+            <ol className="list-decimal pl-5 space-y-2">
+              {hostOptions.map((opt, i) => (
+                <li
+                  key={`${hostQ?.questionID ?? 'q'}-${i}`}
+                  className="text-gray-900"
+                >
+                  {opt}
+                </li>
+              ))}
+              {hostOptions.length === 0 && (
+                <li className="text-gray-400">Варианты недоступны</li>
+              )}
+            </ol>
+          </div>
         )}
 
         <div className={`grid gap-8 ${showQR ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>

@@ -159,6 +159,13 @@ export async function POST(
       const presentation = handler.presentQuestion(firstQuestion);
       (state0 as SessionState).shuffledOptions = presentation.options;
 
+      console.log('[Quiz API DEBUG] start', {
+        roomId,
+        selectedQuestions: selected.length,
+        firstQuestionID: selected[0],
+        totalQuestions: selected.length,
+      });
+
       await saveSessionState(roomId, state0 as SessionState);
 
       return NextResponse.json({
@@ -220,6 +227,17 @@ export async function POST(
       const answeredPlayers = Object.keys(state.answers);
       const allAnswered = activePlayers.every(pid => answeredPlayers.includes(pid));
 
+      console.log('[Quiz API DEBUG] answer', {
+        roomId,
+        playerId,
+        correct: result.isCorrect,
+        option,
+        qid: state.currentQuestionID,
+        totalAnswers: answeredPlayers.length,
+        totalPlayers: activePlayers.length,
+        allAnswered,
+      });
+
       if (allAnswered && handler.onAllAnswered) {
         handler.onAllAnswered({ state, q: enrichedQuestion });
       }
@@ -259,16 +277,17 @@ export async function POST(
           }
 
           const nextIndex = state.currentQuestionIndex + 1;
+          const isLastQuestion = nextIndex >= state.selectedQuestions.length;
           
-          console.log('[NEXT]', { 
-            roomId, 
-            currentIndex: state.currentQuestionIndex,
-            nextIndex, 
-            totalQuestions: state.selectedQuestions.length,
-            selectedQuestions: state.selectedQuestions
+          console.log('[Quiz API DEBUG] next', {
+            roomId,
+            phaseBefore: state.phase,
+            currentQuestionID: state.currentQuestionID,
+            nextIndex,
+            finished: isLastQuestion,
           });
           
-          if (nextIndex >= state.selectedQuestions.length) {
+          if (isLastQuestion) {
             // Все вопросы отвечены — включаем postgamePending с финальными результатами
             const now = Date.now();
             const finalResults = computeFinalResults(state.players ?? {});
@@ -285,6 +304,13 @@ export async function POST(
             };
             
             await saveSessionState(roomId, state);
+
+            console.log('[Quiz API DEBUG] next → LAST QUESTION, setting lastResults', {
+              roomId,
+              endedAt: now,
+              autoFinishAt: now + POSTGAME_WAIT_MS,
+              winnersCount: finalResults.winners.length,
+            });
 
             const autoFinishAt = isPostgamePending(state.lastResults)
               ? state.lastResults.autoFinishAt
@@ -306,6 +332,13 @@ export async function POST(
 
           // Переходим к следующему вопросу
           const nextQuestionId = state.selectedQuestions[nextIndex];
+          
+          console.log('[Quiz API DEBUG] next → moving to question', {
+            roomId,
+            from: state.currentQuestionID,
+            to: nextQuestionId,
+            nextIndex,
+          });
           
           if (!nextQuestionId) {
             console.error('[NEXT] nextQuestionId is null/undefined at index', nextIndex);

@@ -37,9 +37,15 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
   const [sessionExists, setSessionExists] = useState<boolean | null>(null);
   const [checkingSession, setCheckingSession] = useState(false);
+  const [gameState, setGameState] = useState<{ phase?: string; currentQuestionID?: number | null; postgamePending?: boolean; lastResults?: unknown } | null>(null);
   
   // Ref to track previous question ID for change detection
   const prevQuestionIdRef = useRef<string | null>(null);
+
+  // Debug mode detection
+  const debugEnabled =
+    (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1') ||
+    process.env.NEXT_PUBLIC_DEBUG_HOST === '1';
 
   const channelName = useMemo(() => `yoplix-join-${slug}`, [slug]);
 
@@ -116,6 +122,22 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
       const res = await fetch(`/api/sessions/${roomId}/quiz`);
       if (res.ok) {
         const data = await res.json();
+        if (debugEnabled) {
+          console.log('[PLAYER DEBUG] received state from /quiz', {
+            roomId,
+            phase: data.phase,
+            currentQuestionID: data.currentQuestionID,
+            postgamePending: data.postgamePending,
+            finished: data.finished,
+            hasLastResults: !!data.lastResults,
+          });
+          setGameState({
+            phase: data.phase,
+            currentQuestionID: data.currentQuestionID,
+            postgamePending: data.postgamePending,
+            lastResults: data.lastResults,
+          });
+        }
         if (data.postgamePending) {
           // Фаза complete: показываем финальное сообщение
           setCurrentQuestion(null);
@@ -126,7 +148,7 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
         }
       }
     } catch {}
-  }, [roomId]);
+  }, [roomId, debugEnabled]);
 
   const checkGameStatus = useCallback(async () => {
     if (!roomId) return;
@@ -323,6 +345,17 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
     }
     
     setIsSubmittingAnswer(true);
+    const questionId = (currentQuestion as { questionID?: number }).questionID;
+    
+    if (debugEnabled) {
+      console.log('[PLAYER DEBUG] submitting answer', {
+        roomId,
+        playerId,
+        questionID: questionId,
+        option: answer,
+      });
+    }
+    
     console.log('handleAnswerSelect - submitting answer:', answer);
     
     try {
@@ -533,6 +566,21 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
                 {/* TODO: добавить отображение итогов, если они приходят в data.lastResults */}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Debug panel */}
+        {debugEnabled && (
+          <div className="mt-4 rounded-lg border border-dashed p-3 text-xs bg-white">
+            <div className="font-semibold mb-1">🛠 Debug (Player)</div>
+            <div className="grid grid-cols-2 gap-1">
+              <div>roomId: <code>{roomId || '—'}</code></div>
+              <div>playerId: <code>{playerId || '—'}</code></div>
+              <div>phase: <code>{gameState?.phase || '—'}</code></div>
+              <div>currentQuestionID: <code>{gameState?.currentQuestionID ?? 'null'}</code></div>
+              <div>hasResults: <code>{String(!!gameState?.lastResults)}</code></div>
+              <div>isPostgamePending: <code>{String(gameState?.postgamePending || false)}</code></div>
+            </div>
           </div>
         )}
       </main>

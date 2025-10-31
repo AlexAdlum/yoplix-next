@@ -1,4 +1,5 @@
 import Link from "next/link";
+import VisitPingLink from "@/app/components/VisitPingLink";
 import { quizzes } from "@/app/data/quizzes";
 
 export default function Home() {
@@ -33,7 +34,7 @@ export default function Home() {
         {/* Quiz Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
           {quizzes.map((quiz) => (
-            <Link
+            <VisitPingLink
               key={quiz.id}
               href={`/quiz/${quiz.slug}`}
               className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 hover:scale-105 overflow-hidden"
@@ -71,7 +72,7 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-            </Link>
+            </VisitPingLink>
           ))}
         </div>
       </main>

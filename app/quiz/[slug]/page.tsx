@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getQuizBySlug, quizzes } from "@/app/data/quizzes";
+import VisitPing from "@/app/components/VisitPing";
 
 // ISR: обновление кэша раз в 60 секунд
 export const revalidate = 60;
@@ -53,6 +54,7 @@ export default async function QuizPage({ params }: QuizPageProps) {
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <VisitPing />
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* Quiz Header */}
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-8 text-white">

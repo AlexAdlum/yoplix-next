@@ -16,7 +16,9 @@
   "dependencies": {
     "@upstash/redis": "^1.35.6",
     "@vercel/kv": "^3.0.0",
+    "drizzle-orm": "0.44.7",
     "next": "15.5.5",
+    "pg": "8.16.3",
     "qrcode": "^1.5.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -26,12 +28,16 @@
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.15.6",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "17.2.3",
+    "drizzle-kit": "0.31.6",
     "eslint": "^9",
     "eslint-config-next": "15.5.5",
     "tailwindcss": "^4",
+    "tsx": "4.20.6",
     "typescript": "^5"
   },
   "engines": {

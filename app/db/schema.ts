@@ -8,3 +8,15 @@ export const users = pgTable('users', {
   lastTimestamp: timestamp('last_timestamp', { withTimezone: true }),
 });
 
+export const visits = pgTable('visits', {
+  userId: text('user_id').notNull(),
+  slug: text('slug').notNull(),
+  path: text('path').notNull(),
+  referrer: text('referrer').default(''),
+  ua: text('ua').default(''),          // user-agent (soft FP)
+  ch: text('client_hints').default(''), // UA-CH JSON string
+  ipHash: text('ip_hash').notNull(),    // sha256(ip|ua)
+  visitedAt: timestamp('visited_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+

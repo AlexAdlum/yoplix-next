@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getAvatarUrl } from "@/app/lib/avatar";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import type { PostgamePending } from "@/types/quiz";
+import { track } from "@/app/lib/track";
 
 const avatars = [
   getAvatarUrl("Ava1"),
@@ -370,6 +371,12 @@ export default function JoinPageClient({ quiz, slug }: JoinPageClientProps) {
         console.log('[JOIN] OK', data);
         setJoined(true);
         console.log('handleReady - player joined successfully');
+        
+        // Track player join
+        const uid = document.cookie.split('; ').find(x => x.startsWith('yplx_uid='))?.split('=')[1];
+        if (uid && roomId) {
+          track('player_joined', { roomId, userId: uid, slug });
+        }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
         console.error('[JOIN] BAD', response.status, errorData);

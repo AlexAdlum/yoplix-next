@@ -1,5 +1,6 @@
 'use client';
 import { useEffect } from 'react';
+import { track } from '@/app/lib/track';
 
 interface VisitPingProps {
   slug?: string;
@@ -28,6 +29,16 @@ export default function VisitPing({ slug = '', path = '' }: VisitPingProps = {})
           body: JSON.stringify(data),
         }).catch(() => {});
       }
+    } catch {}
+
+    // Device tracking
+    try {
+      const uid = document.cookie.split('; ').find(x => x.startsWith('yplx_uid='))?.split('=')[1];
+      if (!uid) return;
+      const ua = navigator.userAgent;
+      const uaData = (navigator as { userAgentData?: { platform?: string } }).userAgentData;
+      const ch: Record<string, unknown> = { uaPlatform: uaData?.platform };
+      track('device_seen', { userId: uid, fingerprintHash: 'na', ua, clientHints: ch });
     } catch {}
   }, [slug, path]);
 

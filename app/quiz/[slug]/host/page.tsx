@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getAvatarUrl } from "@/app/lib/avatar";
 import { useEffect, useMemo, useState } from "react";
 import { getQuizBySlug } from "@/app/data/quizzes";
+import { track } from "@/app/lib/track";
 
 interface HostPageProps {
   params: { slug: string };
@@ -589,6 +590,12 @@ export default function HostPage({ params }: HostPageProps) {
         alert(`Ошибка: ${error.error || 'Не удалось начать игру'}`);
       } else {
         console.log('[HOST] Quiz started successfully');
+        
+        // Track session start
+        const uid = document.cookie.split('; ').find(x => x.startsWith('yplx_uid='))?.split('=')[1];
+        if (uid) {
+          track('session_started', { roomId, hostUserId: uid, slug: params.slug, startAt: new Date().toISOString() });
+        }
       }
     } catch (error) {
       console.error('[HOST] START_ERROR', error);

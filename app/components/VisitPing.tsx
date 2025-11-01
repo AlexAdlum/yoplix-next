@@ -1,6 +1,6 @@
 'use client';
 import { useEffect } from 'react';
-import { track } from '@/app/lib/track';
+import { track, oncePerSession, getUserIdFromCookie } from '@/app/lib/analytics';
 
 interface VisitPingProps {
   slug?: string;
@@ -31,15 +31,17 @@ export default function VisitPing({ slug = '', path = '' }: VisitPingProps = {})
       }
     } catch {}
 
-    // Device tracking
-    try {
-      const uid = document.cookie.split('; ').find(x => x.startsWith('yplx_uid='))?.split('=')[1];
-      if (!uid) return;
-      const ua = navigator.userAgent;
-      const uaData = (navigator as { userAgentData?: { platform?: string } }).userAgentData;
-      const ch: Record<string, unknown> = { uaPlatform: uaData?.platform };
-      track('device_seen', { userId: uid, fingerprintHash: 'na', ua, clientHints: ch });
-    } catch {}
+    // Device tracking - once per session
+    const userId = getUserIdFromCookie();
+    const slugSafe = slug || '';
+    oncePerSession('device_seen', () => {
+      if (userId && slugSafe) {
+        const ua = navigator.userAgent;
+        const uaData = (navigator as { userAgentData?: { platform?: string } }).userAgentData;
+        const ch: Record<string, unknown> = { uaPlatform: uaData?.platform };
+        track('device_seen', { userId, fingerprintHash: 'device_na', ua, clientHints: ch });
+      }
+    });
   }, [slug, path]);
 
   return null;
